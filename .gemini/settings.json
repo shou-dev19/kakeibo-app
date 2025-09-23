@@ -1,0 +1,31 @@
+{
+  "mcpServers": {
+    "github": {
+      "httpUrl": "https://api.githubcopilot.com/mcp/",
+      "trust": true,
+      "headers": {
+        "Authorization": "Bearer $GITHUB_PAT"
+      }
+    },
+    "context7": {
+      "httpUrl": "https://mcp.context7.com/mcp",
+      "headers": {
+        // "CONTEXT7_API_KEY": "YOUR_API_KEY",
+        "Accept": "application/json, text/event-stream"
+      }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"]
+    }
+    // "Framelink Figma MCP": { FigmaMakeのページでは使えなかったため一時的に削除
+    //   "command": "npx",
+    //   "args": [
+    //     "-y",
+    //     "figma-developer-mcp",
+    //     "--figma-api-key=$FIGMA_PAT",
+    //     "--stdio"
+    //   ]
+    // }
+  }
+}

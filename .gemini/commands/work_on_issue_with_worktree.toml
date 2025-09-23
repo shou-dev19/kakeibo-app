@@ -1,0 +1,18 @@
+# Command: /work_on_issue_with_worktree
+description = "Starts work on a given GitHub issue using git worktree."
+prompt = """
+Please start working on the GitHub issue at the following URL using git worktree: {{args}}
+use context7
+
+Follow these steps:
+1. Parse the Issue URL to get the repository name, issue number, and title.
+2. Read the issue details and summarize the task to confirm your understanding.
+3. Fetch the latest information from the main branch by running `git fetch origin main`.
+4. Create a new branch name based on the issue details, following the naming convention `type/issue-number/short-description` found in `GEMINI.md`.
+5. Create a new worktree and branch using the command `git worktree add -b <new_branch_name> ../<worktree_directory_name> origin/main`. The worktree directory name should be the same as the branch name.
+6. Change into the new worktree directory to begin work on the issue.
+7. Implement the necessary changes to resolve the issue.
+8. Once the implementation is complete, commit the changes and push the branch to the remote repository.
+9. Create a pull request to merge the changes into the main branch.
+10. IMPORTANT: Do not delete the directory created by git worktree unless explicitly instructed to do so.
+"""

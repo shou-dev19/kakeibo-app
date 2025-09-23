@@ -1,0 +1,16 @@
+# Command: /address_review_comments
+description = "Addresses review comments on a given pull request URL."
+prompt = """
+Please address the review comments on the pull request at the following URL: {{args}}
+use context7
+
+Follow these steps:
+1.  Fetch all review comments from the pull request URL provided.
+2.  Analyze each comment to determine if a code change is required.
+3.  If changes are needed:
+    a. Check out the pull request's branch.
+    b. Apply the necessary code modifications.
+    c. Commit the changes with a descriptive message (e.g., "fix: Address review comments").
+    d. Push the changes to the remote branch to update the pull request.
+4.  If a comment does not require code changes, reply to the review comment on the pull request, explaining the reasoning for not making a change.
+"""
