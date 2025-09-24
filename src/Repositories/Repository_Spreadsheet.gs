@@ -5,7 +5,8 @@
 
 const SHEET_NAMES = {
   DB_TRANSACTIONS: 'DB_Transactions',
-  SETTINGS: 'Settings'
+  SETTINGS: 'Settings',
+  SETTINGS_CSV_FORMATS: 'Settings_CsvFormats'
 };
 
 /**
@@ -52,6 +53,30 @@ function getCategoryRules() {
     return rules;
   } catch (e) {
     console.error('カテゴリ分類ルールの取得に失敗しました。', e);
+    throw e;
+  }
+}
+
+/**
+ * Settings_CsvFormatsシートからCSVフォーマット定義を取得する
+ * @returns {Array<Array<any>>} CSVフォーマット定義の2次元配列
+ */
+function getCsvFormats() {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = spreadsheet.getSheetByName(SHEET_NAMES.SETTINGS_CSV_FORMATS);
+    if (!sheet) {
+      throw new Error(`シート「Settings_CsvFormats」が見つかりません。`);
+    }
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return []; // 定義がない場合は空の配列を返す
+    }
+    const formats = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+    console.log(`${formats.length}件のCSVフォーマット定義を取得しました。`);
+    return formats;
+  } catch (e) {
+    console.error('CSVフォーマット定義の取得に失敗しました。', e);
     throw e;
   }
 }

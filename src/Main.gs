@@ -16,8 +16,23 @@ function onOpen() {
  * CSVインポート用のファイル選択ダイアログを表示する
  */
 function showCsvImportDialog() {
+  // CSVフォーマット定義を取得
+  const formats = getCsvFormats();
+  const formatNames = formats.map(format => format[0]); // FormatNameのリストを作成
+
+  // プルダウンメニューのHTMLを生成
+  let optionsHtml = '';
+  formatNames.forEach(name => {
+    optionsHtml += `<option value="${name}">${name}</option>`;
+  });
+
   const htmlContent = `
     <form id="csv-form">
+      <p><b>1. フォーマットを選択</b></p>
+      <select name="formatName" id="formatName">
+        ${optionsHtml}
+      </select>
+      <p><b>2. CSVファイルを選択</b></p>
       <input type="file" name="csvFile" id="csvFile" />
       <br><br>
       <input type="button" value="インポート" onclick="processForm()" />
@@ -36,7 +51,7 @@ function showCsvImportDialog() {
   `;
   const html = HtmlService.createHtmlOutput(htmlContent)
       .setWidth(300)
-      .setHeight(120);
+      .setHeight(200);
   SpreadsheetApp.getUi().showModalDialog(html, 'CSVファイルを選択');
 }
 
@@ -47,13 +62,28 @@ function showCsvImportDialog() {
 function importCsv(formObject) {
   try {
     const fileBlob = formObject.csvFile;
+    const formatName = formObject.formatName;
+
     if (!fileBlob) {
       throw new Error('ファイルが選択されていません。');
     }
-    const csvData = fileBlob.getDataAsString('Shift_JIS'); // 文字コードを指定
+    if (!formatName) {
+      throw new Error('CSVフォーマットが選択されていません。');
+    }
+
+    // 対応するフォーマット定義を検索
+    const formats = getCsvFormats();
+    const selectedFormat = formats.find(f => f[0] === formatName);
+
+    if (!selectedFormat) {
+      throw new Error(`定義されていないCSVフォーマットです: ${formatName}`);
+    }
+
+    const encoding = selectedFormat[5]; // Encoding列
+    const csvData = fileBlob.getDataAsString(encoding);
 
     // 1. CSVを解析
-    const parsedData = parseMitsuiCardCsv(csvData);
+    const parsedData = parseCsv(csvData, selectedFormat);
     if (parsedData.length === 0) {
       SpreadsheetApp.getUi().alert('CSVから有効なデータを読み取れませんでした。');
       return;
@@ -108,5 +138,19 @@ function initializeSheets() {
     SpreadsheetApp.getUi().alert(`「${settingsSheetName}」シートを作成し、サンプルルールを定義しました。`);
   } else {
     SpreadsheetApp.getUi().alert(`「${settingsSheetName}」シートは既に存在します。`);
+  }
+
+  // Settings_CsvFormatsシートの作成とヘッダー設定
+  const formatsSheetName = 'Settings_CsvFormats';
+  sheet = spreadsheet.getSheetByName(formatsSheetName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(formatsSheetName);
+    const headers = ['FormatName', 'DateColumn', 'DescriptionColumn', 'AmountColumn', 'HeaderRows', 'Encoding'];
+    const initialFormat = ['三井住友カード', 1, 2, 3, 1, 'Shift_JIS']; // 列番号は1-based
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(2, 1, 1, initialFormat.length).setValues([initialFormat]);
+    SpreadsheetApp.getUi().alert(`「${formatsSheetName}」シートを作成し、サンプルフォーマットを定義しました。`);
+  } else {
+    SpreadsheetApp.getUi().alert(`「${formatsSheetName}」シートは既に存在します。`);
   }
 }
