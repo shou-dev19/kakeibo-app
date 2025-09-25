@@ -85,4 +85,5 @@ RUN echo '\nexport PATH=$PATH:/usr/local/share/npm-global/bin' >> /home/node/.zs
 
 # Install Claude and Gemini
 RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} && \
-    npm install -g @google/gemini-cli
+    npm install -g @google/gemini-cli && \
+    npm install -g @google/clasp

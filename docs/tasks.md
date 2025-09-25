@@ -39,10 +39,10 @@
 -   [x] **2-1. レポート出力用シートの作成**
     -   [x] `Report_MonthlySummary` シートを作成する。
     -   [x] `Report_TransactionList` シートを作成する。
--   [ ] **2-2. レポート生成サービスの実装**
-    -   [ ] `Service_ReportGenerator.gs` を作成する。
-    -   [ ] `DB_Transactions` のデータから、指定された月の収支合計を計算するロジック（F-04）を実装する。
-    -   [ ] `DB_Transactions` のデータから、指定された月の明細一覧を抽出するロジック（F-05）を実装する。
+-   [x] **2-2. レポート生成サービスの実装**
+    -   [x] `Service_ReportGenerator.gs` を作成する。
+    -   [x] `DB_Transactions` のデータから、指定された月の収支合計を計算するロジック（F-04）を実装する。
+    -   [x] `DB_Transactions` のデータから、指定された月の明細一覧を抽出するロジック（F-05）を実装する。
 -   [ ] **2-3. レポート機能のUI統合**
     -   [ ] `Main.gs` のカスタムメニューに「月次レポート生成」機能を追加する。
     -   [ ] メニューを実行すると、各レポートシート（`Report_MonthlySummary`, `Report_TransactionList`）に結果が出力されることを確認する。
