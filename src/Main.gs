@@ -9,6 +9,8 @@ function onOpen() {
       .addItem('初期設定', 'initializeSheets')
       .addSeparator()
       .addItem('CSVファイルを手動インポート', 'showCsvImportDialog')
+      .addSeparator()
+      .addItem('月次レポートを生成', 'showGenerateReportDialog')
       .addToUi();
 }
 
@@ -103,6 +105,38 @@ function importCsv(formObject) {
   }
 }
 
+/**
+ * レポート生成の対象年月をユーザーに問い合わせるダイアログを表示する
+ */
+function showGenerateReportDialog() {
+  const ui = SpreadsheetApp.getUi();
+  const yearResult = ui.prompt('レポート生成', '対象の年を入力してください（例: 2025）', ui.ButtonSet.OK_CANCEL);
+
+  if (yearResult.getSelectedButton() !== ui.Button.OK) return;
+  const year = parseInt(yearResult.getResponseText(), 10);
+
+  const monthResult = ui.prompt('レポート生成', '対象の月を入力してください（1-12）', ui.ButtonSet.OK_CANCEL);
+  if (monthResult.getSelectedButton() !== ui.Button.OK) return;
+  const month = parseInt(monthResult.getResponseText(), 10);
+
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+    ui.alert('無効な年月です。処理を中断します。');
+    return;
+  }
+
+  generateReports(year, month);
+}
+
+/**
+ * 指定された年月の各種レポートを生成する
+ * @param {number} year 
+ * @param {number} month 
+ */
+function generateReports(year, month) {
+  generateMonthlySummaryReport(year, month);
+  generateTransactionListReport(year, month);
+}
+
 
 /**
  * アプリケーションの初期設定を行います。
@@ -116,7 +150,7 @@ function initializeSheets() {
   let sheet = spreadsheet.getSheetByName(transactionsSheetName);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(transactionsSheetName);
-    const headers = ['日付', '内容', '金額', 'カテゴリ', 'メモ'];
+    const headers = ['日付', '内容', '金額', '種別', 'カテゴリ', 'メモ'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     SpreadsheetApp.getUi().alert(`「${transactionsSheetName}」シートを作成しました。`);
   } else {
@@ -145,8 +179,8 @@ function initializeSheets() {
   sheet = spreadsheet.getSheetByName(formatsSheetName);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(formatsSheetName);
-    const headers = ['FormatName', 'DateColumn', 'DescriptionColumn', 'AmountColumn', 'HeaderRows', 'Encoding'];
-    const initialFormat = ['三井住友カード', 1, 2, 3, 1, 'Shift_JIS']; // 列番号は1-based
+    const headers = ['FormatName', 'DateColumn', 'DescriptionColumn', 'AmountColumn', 'HeaderRows', 'Encoding', 'DefaultType'];
+    const initialFormat = ['三井住友カード', 1, 2, 3, 1, 'Shift_JIS', '支出']; // 列番号は1-based
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.getRange(2, 1, 1, initialFormat.length).setValues([initialFormat]);
     SpreadsheetApp.getUi().alert(`「${formatsSheetName}」シートを作成し、サンプルフォーマットを定義しました。`);
