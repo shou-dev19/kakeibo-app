@@ -36,9 +36,9 @@
 
 登録したデータを可視化するための基本的なレポート機能を実装する。
 
--   [ ] **2-1. レポート出力用シートの作成**
-    -   [ ] `Report_MonthlySummary` シートを作成する。
-    -   [ ] `Report_TransactionList` シートを作成する。
+-   [x] **2-1. レポート出力用シートの作成**
+    -   [x] `Report_MonthlySummary` シートを作成する。
+    -   [x] `Report_TransactionList` シートを作成する。
 -   [ ] **2-2. レポート生成サービスの実装**
     -   [ ] `Service_ReportGenerator.gs` を作成する。
     -   [ ] `DB_Transactions` のデータから、指定された月の収支合計を計算するロジック（F-04）を実装する。

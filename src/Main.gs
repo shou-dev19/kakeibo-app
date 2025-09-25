@@ -153,4 +153,24 @@ function initializeSheets() {
   } else {
     SpreadsheetApp.getUi().alert(`「${formatsSheetName}」シートは既に存在します。`);
   }
+
+  // Report_MonthlySummaryシートの作成
+  const monthlySummarySheetName = 'Report_MonthlySummary';
+  sheet = spreadsheet.getSheetByName(monthlySummarySheetName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(monthlySummarySheetName);
+    SpreadsheetApp.getUi().alert(`「${monthlySummarySheetName}」シートを作成しました。`);
+  } else {
+    SpreadsheetApp.getUi().alert(`「${monthlySummarySheetName}」シートは既に存在します。`);
+  }
+
+  // Report_TransactionListシートの作成
+  const transactionListSheetName = 'Report_TransactionList';
+  sheet = spreadsheet.getSheetByName(transactionListSheetName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(transactionListSheetName);
+    SpreadsheetApp.getUi().alert(`「${transactionListSheetName}」シートを作成しました。`);
+  } else {
+    SpreadsheetApp.getUi().alert(`「${transactionListSheetName}」シートは既に存在します。`);
+  }
 }
