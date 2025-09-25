@@ -103,3 +103,82 @@ function getTransactionsForMonth(year, month) {
 
   return filteredData;
 }
+
+/**
+ * 全期間の取引データから資産推移を計算し、グラフを生成する
+ */
+function generateAssetTransitionGraph() {
+  // 1. 口座情報を取得し、初期残高の合計と最も古い基準日を特定
+  const accounts = getAccounts();
+  if (accounts.length === 0) {
+    SpreadsheetApp.getUi().alert('口座情報が未登録です。Accountsシートに初期残高を登録してください。');
+    return;
+  }
+
+  let totalInitialBalance = 0;
+  let oldestInitialDate = new Date();
+  accounts.forEach(acc => {
+    const balance = acc[1];
+    const date = new Date(acc[2]);
+    totalInitialBalance += balance;
+    if (date < oldestInitialDate) {
+      oldestInitialDate = date;
+    }
+  });
+
+  // 2. 全取引履歴を取得し、基準日以降のものをフィルタリング
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.DB_TRANSACTIONS);
+  if (sheet.getLastRow() < 2) {
+    SpreadsheetApp.getUi().alert('取引データがありません。');
+    return;
+  }
+  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues();
+  const filteredData = allData.filter(tx => new Date(tx[0]) >= oldestInitialDate);
+
+  // 3. 月末ごとの残高を計算
+  const monthlyBalances = {};
+  let currentBalance = totalInitialBalance;
+
+  // まず全取引を日付でソート
+  filteredData.sort((a, b) => new Date(a[0]) - new Date(b[0]));
+
+  // 計算開始月の月初残高を設定
+  const startMonthKey = `${oldestInitialDate.getFullYear()}-${('0' + (oldestInitialDate.getMonth() + 1)).slice(-2)}`;
+  monthlyBalances[startMonthKey] = totalInitialBalance;
+
+  filteredData.forEach(tx => {
+    const date = new Date(tx[0]);
+    const amount = tx[2];
+    const type = tx[3];
+
+    if (type === '収入') {
+      currentBalance += amount;
+    } else {
+      currentBalance -= amount;
+    }
+
+    const monthKey = `${date.getFullYear()}-${('0' + (date.getMonth() + 1)).slice(-2)}`;
+    monthlyBalances[monthKey] = currentBalance;
+  });
+
+  // 4. データをシート出力用に整形
+  const chartData = Object.keys(monthlyBalances).sort().map(key => [key, monthlyBalances[key]]);
+  chartData.unshift(['年月', '月末残高']); // ヘッダーを追加
+
+  // 5. シートに出力してグラフを作成
+  const reportSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Report_AssetTransition');
+  reportSheet.clear();
+  reportSheet.getRange(1, 1, chartData.length, 2).setValues(chartData);
+
+  reportSheet.getCharts().forEach(chart => reportSheet.removeChart(chart));
+
+  const chart = reportSheet.newChart()
+    .setChartType(Charts.ChartType.LINE)
+    .addRange(reportSheet.getRange('A1:B' + chartData.length))
+    .setPosition(3, 3, 0, 0)
+    .setOption('title', '資産推移グラフ')
+    .build();
+
+  reportSheet.insertChart(chart);
+  SpreadsheetApp.getUi().alert('資産推移グラフを生成しました。');
+}

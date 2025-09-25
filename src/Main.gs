@@ -11,6 +11,7 @@ function onOpen() {
       .addItem('CSVファイルを手動インポート', 'showCsvImportDialog')
       .addSeparator()
       .addItem('月次レポートを生成', 'showGenerateReportDialog')
+      .addItem('資産推移グラフを生成', 'generateAssetTransitionGraph')
       .addToUi();
 }
 
@@ -206,5 +207,29 @@ function initializeSheets() {
     SpreadsheetApp.getUi().alert(`「${transactionListSheetName}」シートを作成しました。`);
   } else {
     SpreadsheetApp.getUi().alert(`「${transactionListSheetName}」シートは既に存在します。`);
+  }
+
+  // Report_AssetTransitionシートの作成
+  const assetTransitionSheetName = 'Report_AssetTransition';
+  sheet = spreadsheet.getSheetByName(assetTransitionSheetName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(assetTransitionSheetName);
+    SpreadsheetApp.getUi().alert(`「${assetTransitionSheetName}」シートを作成しました。`);
+  } else {
+    SpreadsheetApp.getUi().alert(`「${assetTransitionSheetName}」シートは既に存在します。`);
+  }
+
+  // Accountsシートの作成
+  const accountsSheetName = 'Accounts';
+  sheet = spreadsheet.getSheetByName(accountsSheetName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(accountsSheetName);
+    const headers = ['AccountName', 'InitialBalance', 'InitialBalanceDate'];
+    const sampleAccount = ['三菱UFJ銀行', 1000000, '2025-07-01'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(2, 1, 1, sampleAccount.length).setValues([sampleAccount]);
+    SpreadsheetApp.getUi().alert(`「${accountsSheetName}」シートを作成し、サンプル口座を定義しました。`);
+  } else {
+    SpreadsheetApp.getUi().alert(`「${accountsSheetName}」シートは既に存在します。`);
   }
 }

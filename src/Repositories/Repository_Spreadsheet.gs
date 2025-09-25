@@ -6,7 +6,8 @@
 const SHEET_NAMES = {
   DB_TRANSACTIONS: 'DB_Transactions',
   SETTINGS: 'Settings',
-  SETTINGS_CSV_FORMATS: 'Settings_CsvFormats'
+  SETTINGS_CSV_FORMATS: 'Settings_CsvFormats',
+  ACCOUNTS: 'Accounts'
 };
 
 /**
@@ -77,6 +78,30 @@ function getCsvFormats() {
     return formats;
   } catch (e) {
     console.error('CSVフォーマット定義の取得に失敗しました。', e);
+    throw e;
+  }
+}
+
+/**
+ * Accountsシートから口座情報を取得する
+ * @returns {Array<Array<any>>} 口座情報の2次元配列
+ */
+function getAccounts() {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = spreadsheet.getSheetByName(SHEET_NAMES.ACCOUNTS);
+    if (!sheet) {
+      throw new Error(`シート「${SHEET_NAMES.ACCOUNTS}」が見つかりません。`);
+    }
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return []; // 口座定義がない場合は空の配列を返す
+    }
+    const accounts = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+    console.log(`${accounts.length}件の口座情報を取得しました。`);
+    return accounts;
+  } catch (e) {
+    console.error('口座情報の取得に失敗しました。', e);
     throw e;
   }
 }
