@@ -14,10 +14,8 @@ function parseCsv(csvData, format) {
     return [];
   }
 
-  const [formatName, dateCol, descCol, amountCol, headerRows, encoding, defaultType] = format;
+  const [formatName, dateCol, descCol, expenseCol, incomeCol, headerRows, encoding] = format;
 
-  // parseCsvはShift_JISでも動作するが、明示的に文字コードを指定してパースするのが望ましい
-  // ただし、GASの標準機能ではBlobの文字コード変換が一手間かかるため、ここではUtilities.parseCsvに任せる
   const records = Utilities.parseCsv(csvData);
 
   // 指定されたヘッダー行数をスキップ
@@ -28,26 +26,37 @@ function parseCsv(csvData, format) {
   }
 
   const transactions = records.map(record => {
-    // 列番号は1-basedなので、配列アクセス用に-1する
     const date = record[dateCol - 1];
     const description = record[descCol - 1];
-    const amountStr = record[amountCol - 1];
-
-    // データが不完全な行はスキップ
-    if (!date || !description || !amountStr) {
-      return null;
-    }
     
-    // 金額からカンマや通貨記号などを取り除く
-    const amount = parseInt(amountStr.replace(/[,\uffe5]/g, ''), 10);
+    let amount = 0;
+    let type = '';
 
-    // 日付形式の簡易チェックと、金額が有効な数値でない場合はスキップ
-    if (date.indexOf('/') === -1 || isNaN(amount)) {
+    // 収入列を確認
+    if (incomeCol && record[incomeCol - 1]) {
+      const incomeAmount = parseInt(record[incomeCol - 1].replace(/[,\uffe5]/g, ''), 10);
+      if (!isNaN(incomeAmount) && incomeAmount !== 0) {
+        amount = incomeAmount;
+        type = '収入';
+      }
+    }
+
+    // 収入でない場合、支出列を確認
+    if (type === '' && expenseCol && record[expenseCol - 1]) {
+      const expenseAmount = parseInt(record[expenseCol - 1].replace(/[,\uffe5]/g, ''), 10);
+      if (!isNaN(expenseAmount) && expenseAmount !== 0) {
+        amount = expenseAmount;
+        type = '支出';
+      }
+    }
+
+    // 有効な取引でない場合はスキップ
+    if (type === '' || !date || date.indexOf('/') === -1) {
       return null;
     }
 
     // Repositoryに渡す形式 [日付, 内容, 金額, 種別]
-    return [date, description, amount, defaultType];
+    return [date, description, amount, type];
   }).filter(Boolean); // nullの要素を除外
 
   console.log(`${transactions.length}件の取引データをCSV(${formatName})から解析しました。`);

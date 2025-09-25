@@ -81,7 +81,7 @@ function importCsv(formObject) {
       throw new Error(`定義されていないCSVフォーマットです: ${formatName}`);
     }
 
-    const encoding = selectedFormat[5]; // Encoding列
+    const encoding = selectedFormat[6]; // Encoding列
     const csvData = fileBlob.getDataAsString(encoding);
 
     // 1. CSVを解析
