@@ -18,7 +18,7 @@ function categorizeTransactions(transactions) {
   if (rules.length === 0) {
     console.warn('カテゴリ分類ルールが設定されていません。');
     // カテゴリが空のままデータを返す
-    return transactions.map(t => [t[0], t[1], t[2], '', '']);
+    return transactions.map(t => [t[0], t[1], t[2], t[3], '', '']); // [日付, 内容, 金額, 種別, カテゴリ, メモ]
   }
 
   const categorizedTransactions = transactions.map(transaction => {
@@ -36,7 +36,7 @@ function categorizeTransactions(transactions) {
     }
     
     // 元のデータにカテゴリと空のメモを追加して返す
-    return [transaction[0], transaction[1], transaction[2], category, ''];
+    return [transaction[0], transaction[1], transaction[2], transaction[3], category, ''];
   });
 
   console.log(`${categorizedTransactions.length}件の取引データをカテゴリ分類しました。`);

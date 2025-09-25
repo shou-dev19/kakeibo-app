@@ -72,7 +72,7 @@ function getCsvFormats() {
     if (lastRow < 2) {
       return []; // 定義がない場合は空の配列を返す
     }
-    const formats = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+    const formats = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
     console.log(`${formats.length}件のCSVフォーマット定義を取得しました。`);
     return formats;
   } catch (e) {

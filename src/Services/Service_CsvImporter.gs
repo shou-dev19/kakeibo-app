@@ -14,7 +14,7 @@ function parseCsv(csvData, format) {
     return [];
   }
 
-  const [formatName, dateCol, descCol, amountCol, headerRows, encoding] = format;
+  const [formatName, dateCol, descCol, amountCol, headerRows, encoding, defaultType] = format;
 
   // parseCsvはShift_JISでも動作するが、明示的に文字コードを指定してパースするのが望ましい
   // ただし、GASの標準機能ではBlobの文字コード変換が一手間かかるため、ここではUtilities.parseCsvに任せる
@@ -46,8 +46,8 @@ function parseCsv(csvData, format) {
       return null;
     }
 
-    // Repositoryに渡す形式 [日付, 内容, 金額]
-    return [date, description, amount];
+    // Repositoryに渡す形式 [日付, 内容, 金額, 種別]
+    return [date, description, amount, defaultType];
   }).filter(Boolean); // nullの要素を除外
 
   console.log(`${transactions.length}件の取引データをCSV(${formatName})から解析しました。`);

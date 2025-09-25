@@ -42,9 +42,9 @@
 -   [x] **2-2. DBスキーマの拡張**
     -   [x] `DB_Transactions`シートに「種別」列（収入/支出）を追加する。
     -   [x] `Settings_CsvFormats`シートに「デフォルト種別」列を追加する。
--   [ ] **2-3. データ永続化ロジックの更新**
-    -   [ ] `Repository_Spreadsheet.gs` を更新し、「種別」列の書き込みに対応する。
-    -   [ ] `Service_CsvImporter.gs` と `Main.gs` を更新し、インポート時に「種別」が正しく設定されるようにする。
+-   [x] **2-3. データ永続化ロジックの更新**
+    -   [x] `Repository_Spreadsheet.gs` を更新し、「種別」列の書き込みに対応する。
+    -   [x] `Service_CsvImporter.gs` と `Main.gs` を更新し、インポート時に「種別」が正しく設定されるようにする。
 -   [ ] **2-4. レポート生成ロジックの更新**
     -   [ ] `Service_ReportGenerator.gs` を更新し、金額の正負ではなく「種別」列に基づいて収支計算を行うように修正する。
 -   [ ] **2-5. レポート機能のUI統合**
