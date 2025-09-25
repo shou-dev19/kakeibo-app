@@ -39,9 +39,9 @@
 -   [x] **2-1. レポート出力用シートの作成**
     -   [x] `Report_MonthlySummary` シートを作成する。
     -   [x] `Report_TransactionList` シートを作成する。
--   [ ] **2-2. DBスキーマの拡張**
-    -   [ ] `DB_Transactions`シートに「種別」列（収入/支出）を追加する。
-    -   [ ] `Settings_CsvFormats`シートの金額列定義を「支出列」「収入列」に分離する。
+-   [x] **2-2. DBスキーマの拡張**
+    -   [x] `DB_Transactions`シートに「種別」列（収入/支出）を追加する。
+    -   [x] `Settings_CsvFormats`シートの金額列定義を「支出列」「収入列」に分離する。
 -   [ ] **2-3. データ永続化ロジックの更新**
     -   [ ] `Repository_Spreadsheet.gs` を更新し、新しいフォーマット定義を正しく読み込むようにする。
     -   [ ] `Service_CsvImporter.gs` を更新し、「支出列」「収入列」を解釈して取引種別を判断するロジックを実装する。

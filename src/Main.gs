@@ -179,8 +179,8 @@ function initializeSheets() {
   sheet = spreadsheet.getSheetByName(formatsSheetName);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(formatsSheetName);
-    const headers = ['FormatName', 'DateColumn', 'DescriptionColumn', 'AmountColumn', 'HeaderRows', 'Encoding', 'DefaultType'];
-    const initialFormat = ['三井住友カード', 1, 2, 3, 1, 'Shift_JIS', '支出']; // 列番号は1-based
+    const headers = ['FormatName', 'DateColumn', 'DescriptionColumn', 'ExpenseColumn', 'IncomeColumn', 'HeaderRows', 'Encoding'];
+    const initialFormat = ['三井住友カード', 1, 2, 3, '', 1, 'Shift_JIS']; // 列番号は1-based。収入列は空。
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.getRange(2, 1, 1, initialFormat.length).setValues([initialFormat]);
     SpreadsheetApp.getUi().alert(`「${formatsSheetName}」シートを作成し、サンプルフォーマットを定義しました。`);
