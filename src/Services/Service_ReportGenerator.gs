@@ -22,18 +22,21 @@ function generateMonthlySummaryReport(year, month) {
 
   transactions.forEach(tx => {
     const amount = tx[2];
-    const category = tx[3] || '未分類';
+    const type = tx[3]; // 種別列
+    const category = tx[4] || '未分類'; // カテゴリ列
 
-    if (amount > 0) {
+    if (type === '収入') {
       totalIncome += amount;
-    } else {
-      totalExpense += Math.abs(amount);
+    } else { // 支出または未定義
+      totalExpense += amount;
     }
 
-    if (!summary[category]) {
-      summary[category] = 0;
+    if (type === '支出') {
+      if (!summary[category]) {
+        summary[category] = 0;
+      }
+      summary[category] += amount;
     }
-    summary[category] += amount;
   });
 
   // シートに出力
@@ -53,10 +56,8 @@ function generateMonthlySummaryReport(year, month) {
   row++;
 
   for (const category in summary) {
-    if (summary[category] < 0) { // 支出のみ表示
-      sheet.getRange(row, 1, 1, 2).setValues([[category, Math.abs(summary[category])]]);
-      row++;
-    }
+    sheet.getRange(row, 1, 1, 2).setValues([[category, summary[category]]]);
+    row++;
   }
 
   SpreadsheetApp.getUi().alert('月次サマリーレポートを生成しました。');
@@ -76,7 +77,7 @@ function generateTransactionListReport(year, month) {
 
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Report_TransactionList');
   sheet.clear();
-  const headers = ['日付', '内容', '金額', 'カテゴリ', 'メモ'];
+  const headers = ['日付', '内容', '金額', '種別', 'カテゴリ', 'メモ'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(2, 1, transactions.length, transactions[0].length).setValues(transactions);
 
@@ -92,7 +93,7 @@ function generateTransactionListReport(year, month) {
  */
 function getTransactionsForMonth(year, month) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.DB_TRANSACTIONS);
-  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
+  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues();
 
   const filteredData = allData.filter(row => {
     if (!row[0] || !(row[0] instanceof Date)) return false;
