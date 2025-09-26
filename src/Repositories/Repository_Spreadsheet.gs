@@ -105,3 +105,29 @@ function getAccounts() {
     throw e;
   }
 }
+
+/**
+ * Settingsシートから割り勘キーワードを取得する
+ * @returns {Array<string>} 割り勘キーワードの配列
+ */
+function getSplitwiseKeywords() {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.SETTINGS);
+    if (!sheet) {
+      throw new Error(`シート「${SHEET_NAMES.SETTINGS}」が見つかりません。`);
+    }
+    // D列の2行目から最後まで読み込む
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return [];
+    }
+    const keywords = sheet.getRange(2, 4, lastRow - 1, 1).getValues()
+      .flat() // 2次元配列を1次元に変換
+      .filter(Boolean); // 空のセルを除外
+    console.log(`${keywords.length}件の割り勘キーワードを取得しました。`);
+    return keywords;
+  } catch (e) {
+    console.error('割り勘キーワードの取得に失敗しました。', e);
+    throw e;
+  }
+}

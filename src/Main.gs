@@ -12,6 +12,8 @@ function onOpen() {
       .addSeparator()
       .addItem('月次レポートを生成', 'showGenerateReportDialog')
       .addItem('資産推移グラフを生成', 'generateAssetTransitionGraph')
+      .addSeparator()
+      .addItem('割り勘計算', 'showSplitwiseDialog')
       .addToUi();
 }
 
@@ -138,6 +140,42 @@ function generateReports(year, month) {
   generateTransactionListReport(year, month);
 }
 
+/**
+ * 割り勘計算の対象年月をユーザーに問い合わせ、結果を表示する
+ */
+function showSplitwiseDialog() {
+  const ui = SpreadsheetApp.getUi();
+  const yearResult = ui.prompt('割り勘計算', '対象の年を入力してください（例: 2025）', ui.ButtonSet.OK_CANCEL);
+  if (yearResult.getSelectedButton() !== ui.Button.OK) return;
+  const year = parseInt(yearResult.getResponseText(), 10);
+
+  const monthResult = ui.prompt('割り勘計算', '対象の月を入力してください（1-12）', ui.ButtonSet.OK_CANCEL);
+  if (monthResult.getSelectedButton() !== ui.Button.OK) return;
+  const month = parseInt(monthResult.getResponseText(), 10);
+
+  if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+    ui.alert('無効な年月です。処理を中断します。');
+    return;
+  }
+
+  const result = calculateSplitwiseTotal(year, month);
+  const total = result.total;
+  const transactions = result.transactions;
+
+  // Report_Splitwiseシートに出力
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Report_Splitwise');
+  sheet.clear();
+  sheet.getRange('A1').setValue(`${year}年${month}月 割り勘対象リスト`);
+  if (transactions.length > 0) {
+    const headers = ['日付', '内容', '金額', '種別', 'カテゴリ', 'メモ'];
+    sheet.getRange(3, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(4, 1, transactions.length, transactions[0].length).setValues(transactions);
+  }
+
+  const perPerson = total / 2; // 2人で割ることを想定
+  ui.alert(`${year}年${month}月の割り勘対象合計: ${total}円\n\n1人あたり: ${perPerson}円\n\n詳細は「Report_Splitwise」シートに出力しました。`);
+}
+
 
 /**
  * アプリケーションの初期設定を行います。
@@ -171,6 +209,13 @@ function initializeSheets() {
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.getRange(2, 1, rules.length, rules[0].length).setValues(rules);
     SpreadsheetApp.getUi().alert(`「${settingsSheetName}」シートを作成し、サンプルルールを定義しました。`);
+
+    // 割り勘キーワードのセクションを追加
+    const splitwiseHeader = ['割り勘対象キーワード'];
+    const splitwiseKeywords = [['割り勘'], ['立替']];
+    sheet.getRange(1, 4, 1, 1).setValue(splitwiseHeader);
+    sheet.getRange(2, 4, splitwiseKeywords.length, 1).setValues(splitwiseKeywords);
+
   } else {
     SpreadsheetApp.getUi().alert(`「${settingsSheetName}」シートは既に存在します。`);
   }
@@ -217,6 +262,16 @@ function initializeSheets() {
     SpreadsheetApp.getUi().alert(`「${assetTransitionSheetName}」シートを作成しました。`);
   } else {
     SpreadsheetApp.getUi().alert(`「${assetTransitionSheetName}」シートは既に存在します。`);
+  }
+
+  // Report_Splitwiseシートの作成
+  const splitwiseSheetName = 'Report_Splitwise';
+  sheet = spreadsheet.getSheetByName(splitwiseSheetName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(splitwiseSheetName);
+    SpreadsheetApp.getUi().alert(`「${splitwiseSheetName}」シートを作成しました。`);
+  } else {
+    SpreadsheetApp.getUi().alert(`「${splitwiseSheetName}」シートは既に存在します。`);
   }
 
   // Accountsシートの作成
