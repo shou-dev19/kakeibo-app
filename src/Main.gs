@@ -189,7 +189,7 @@ function initializeSheets() {
   let sheet = spreadsheet.getSheetByName(transactionsSheetName);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(transactionsSheetName);
-    const headers = ['日付', '内容', '金額', '種別', 'カテゴリ', 'メモ'];
+    const headers = ['日付', '内容', '金額', '種別', '金融機関', 'カテゴリ', 'メモ'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     SpreadsheetApp.getUi().alert(`「${transactionsSheetName}」シートを作成しました。`);
   } else {

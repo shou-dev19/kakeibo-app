@@ -23,7 +23,7 @@ function generateMonthlySummaryReport(year, month) {
   transactions.forEach(tx => {
     const amount = tx[2];
     const type = tx[3]; // 種別列
-    const category = tx[4] || '未分類'; // カテゴリ列
+    const category = tx[5] || '未分類'; // カテゴリ列
 
     if (type === '収入') {
       totalIncome += amount;
@@ -77,7 +77,7 @@ function generateTransactionListReport(year, month) {
 
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Report_TransactionList');
   sheet.clear();
-  const headers = ['日付', '内容', '金額', '種別', 'カテゴリ', 'メモ'];
+  const headers = ['日付', '内容', '金額', '種別', '金融機関', 'カテゴリ', 'メモ'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(2, 1, transactions.length, transactions[0].length).setValues(transactions);
 
@@ -93,7 +93,7 @@ function generateTransactionListReport(year, month) {
  */
 function getTransactionsForMonth(year, month) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.DB_TRANSACTIONS);
-  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues();
+  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
 
   const filteredData = allData.filter(row => {
     if (!row[0] || !(row[0] instanceof Date)) return false;
@@ -132,7 +132,7 @@ function generateAssetTransitionGraph() {
     SpreadsheetApp.getUi().alert('取引データがありません。');
     return;
   }
-  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues();
+  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
   const filteredData = allData.filter(tx => new Date(tx[0]) >= oldestInitialDate);
 
   // 3. 月末ごとの残高を計算

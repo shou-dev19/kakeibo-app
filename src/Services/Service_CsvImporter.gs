@@ -55,8 +55,8 @@ function parseCsv(csvData, format) {
       return null;
     }
 
-    // Repositoryに渡す形式 [日付, 内容, 金額, 種別]
-    return [date, description, amount, type];
+    // Repositoryに渡す形式 [日付, 内容, 金額, 種別, 金融機関]
+    return [date, description, amount, type, formatName];
   }).filter(Boolean); // nullの要素を除外
 
   console.log(`${transactions.length}件の取引データをCSV(${formatName})から解析しました。`);
