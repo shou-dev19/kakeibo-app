@@ -26,8 +26,13 @@ function parseCsv(csvData, format) {
   }
 
   const transactions = records.map(record => {
-    const date = record[dateCol - 1];
+    const rawDate = record[dateCol - 1];
     const description = record[descCol - 1];
+    
+    const date = normalizeDate(rawDate);
+    if (!date) {
+      return null; // 無効な日付フォーマットの行はスキップ
+    }
     
     let amount = 0;
     let type = '';
@@ -51,7 +56,7 @@ function parseCsv(csvData, format) {
     }
 
     // 有効な取引でない場合はスキップ
-    if (type === '' || !date || date.indexOf('/') === -1) {
+    if (type === '') {
       return null;
     }
 
@@ -61,4 +66,30 @@ function parseCsv(csvData, format) {
 
   console.log(`${transactions.length}件の取引データをCSV(${formatName})から解析しました。`);
   return transactions;
+}
+
+/**
+ * 様々な形式の日付文字列を正規化し、Dateオブジェクトを返す
+ * @param {string} dateStr - 日付文字列 (例: '2025/07/12', '250712')
+ * @returns {Date|null} 正規化されたDateオブジェクト、または無効な場合はnull
+ */
+function normalizeDate(dateStr) {
+  if (!dateStr) return null;
+
+  // YYYY/MM/DD 形式
+  if (dateStr.includes('/')) {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // YYMMDD 形式 (6桁の数字)
+  if (/^\d{6}$/.test(dateStr)) {
+    const year = parseInt('20' + dateStr.substring(0, 2), 10);
+    const month = parseInt(dateStr.substring(2, 4), 10) - 1; // Month is 0-indexed
+    const day = parseInt(dateStr.substring(4, 6), 10);
+    const d = new Date(year, month, day);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  return null;
 }
