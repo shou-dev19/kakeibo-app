@@ -13,30 +13,35 @@ function categorizeTransactions(transactions) {
     return [];
   }
 
-  // 設定シートから分類ルールを取得
   const rules = getCategoryRules();
-  if (rules.length === 0) {
-    console.warn('カテゴリ分類ルールが設定されていません。');
-    // カテゴリが空のままデータを返す
-    return transactions.map(t => [t[0], t[1], t[2], t[3], t[4], '', '']); // [日付, 内容, 金額, 種別, 金融機関, カテゴリ, メモ]
-  }
 
   const categorizedTransactions = transactions.map(transaction => {
-    const description = transaction[1]; // 取引内容
+    const description = transaction[1];
     let category = '未分類'; // デフォルトカテゴリ
 
-    // ルールに合致するかチェック
-    for (const rule of rules) {
-      const keyword = rule[0];
-      const assignedCategory = rule[1];
-      if (description.includes(keyword)) {
-        category = assignedCategory;
-        break; // 最初に見つかったルールを適用
+    // ルールが存在する場合のみ、カテゴリのマッチングを行う
+    if (rules.length > 0) {
+      for (const rule of rules) {
+        const keyword = rule[0];
+        const assignedCategory = rule[1];
+        if (description.includes(keyword)) {
+          category = assignedCategory;
+          break;
+        }
       }
     }
     
-    // 元のデータにカテゴリと空のメモを追加して返す
-    return [transaction[0], transaction[1], transaction[2], transaction[3], transaction[4], category, ''];
+    // 新しい配列を作成して返す
+    return [
+      transaction[0], // 日付
+      transaction[1], // 内容
+      transaction[2], // 金額
+      transaction[3], // 種別
+      transaction[4], // 金融機関
+      category,       // ★決定したカテゴリ
+      transaction[6], // メモ (現在は空'')
+      transaction[7]  // 残高
+    ];
   });
 
   console.log(`${categorizedTransactions.length}件の取引データをカテゴリ分類しました。`);

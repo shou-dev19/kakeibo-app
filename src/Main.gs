@@ -113,7 +113,7 @@ function importCsv(formObject) {
       throw new Error(`定義されていないCSVフォーマットです: ${formatName}`);
     }
 
-    const encoding = selectedFormat[6]; // Encoding列
+    const encoding = selectedFormat[7];
     const csvData = fileBlob.getDataAsString(encoding);
 
     // 1. CSVを解析
@@ -212,13 +212,13 @@ function showSplitwiseDialog() {
  */
 function initializeSheets() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  
+
   // DB_Transactionsシートの作成とヘッダー設定
   const transactionsSheetName = 'DB_Transactions';
-  let sheet = spreadsheet.getSheetByName(transactionsSheetName);
+  sheet = spreadsheet.getSheetByName(transactionsSheetName);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(transactionsSheetName);
-    const headers = ['日付', '内容', '金額', '種別', '金融機関', 'カテゴリ', 'メモ'];
+    const headers = ['日付', '内容', '金額', '種別', '金融機関', 'カテゴリ', 'メモ', '残高'];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     SpreadsheetApp.getUi().alert(`「${transactionsSheetName}」シートを作成しました。`);
   } else {
@@ -254,8 +254,8 @@ function initializeSheets() {
   sheet = spreadsheet.getSheetByName(formatsSheetName);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(formatsSheetName);
-    const headers = ['FormatName', 'DateColumn', 'DescriptionColumn', 'ExpenseColumn', 'IncomeColumn', 'HeaderRows', 'Encoding'];
-    const initialFormat = ['三井住友カード', 1, 2, 3, '', 1, 'Shift_JIS']; // 列番号は1-based。収入列は空。
+    const headers = ['FormatName', 'DateColumn', 'DescriptionColumn', 'ExpenseColumn', 'IncomeColumn', 'BalanceColumn', 'HeaderRows', 'Encoding'];
+    const initialFormat = ['三井住友カード', 1, 2, 3, '', '', 1, 'Shift_JIS']; // 残高列は空
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.getRange(2, 1, 1, initialFormat.length).setValues([initialFormat]);
     SpreadsheetApp.getUi().alert(`「${formatsSheetName}」シートを作成し、サンプルフォーマットを定義しました。`);
@@ -303,17 +303,4 @@ function initializeSheets() {
     SpreadsheetApp.getUi().alert(`「${splitwiseSheetName}」シートは既に存在します。`);
   }
 
-  // Accountsシートの作成
-  const accountsSheetName = 'Accounts';
-  sheet = spreadsheet.getSheetByName(accountsSheetName);
-  if (!sheet) {
-    sheet = spreadsheet.insertSheet(accountsSheetName);
-    const headers = ['AccountName', 'InitialBalance', 'InitialBalanceDate'];
-    const sampleAccount = ['三菱UFJ銀行', 1000000, '2025-07-01'];
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(2, 1, 1, sampleAccount.length).setValues([sampleAccount]);
-    SpreadsheetApp.getUi().alert(`「${accountsSheetName}」シートを作成し、サンプル口座を定義しました。`);
-  } else {
-    SpreadsheetApp.getUi().alert(`「${accountsSheetName}」シートは既に存在します。`);
-  }
 }

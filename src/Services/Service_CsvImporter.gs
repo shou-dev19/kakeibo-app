@@ -14,7 +14,7 @@ function parseCsv(csvData, format) {
     return [];
   }
 
-  const [formatName, dateCol, descCol, expenseCol, incomeCol, headerRows, encoding] = format;
+  const [formatName, dateCol, descCol, expenseCol, incomeCol, balanceCol, headerRows, encoding] = format;
 
   const records = Utilities.parseCsv(csvData);
 
@@ -33,7 +33,7 @@ function parseCsv(csvData, format) {
     if (!date) {
       return null; // 無効な日付フォーマットの行はスキップ
     }
-    
+
     let amount = 0;
     let type = '';
 
@@ -60,14 +60,22 @@ function parseCsv(csvData, format) {
       return null;
     }
 
-    // Repositoryに渡す形式 [日付, 内容, 金額, 種別, 金融機関]
-    return [date, description, amount, type, formatName];
+    // 残高を取得
+    let balance = null;
+    if (balanceCol && record[balanceCol - 1]) {
+      const balanceAmount = parseInt(record[balanceCol - 1].replace(/[,\uffe5]/g, ''), 10);
+      if (!isNaN(balanceAmount)) {
+        balance = balanceAmount;
+      }
+    }
+
+    // Repositoryに渡す形式 [日付, 内容, 金額, 種別, 金融機関, カテゴリ(空), メモ(空), 残高]
+    return [date, description, amount, type, formatName, '', '', balance];
   }).filter(Boolean); // nullの要素を除外
 
   console.log(`${transactions.length}件の取引データをCSV(${formatName})から解析しました。`);
   return transactions;
 }
-
 /**
  * 様々な形式の日付文字列を正規化し、Dateオブジェクトを返す
  * @param {string} dateStr - 日付文字列 (例: '2025/07/12', '250712')

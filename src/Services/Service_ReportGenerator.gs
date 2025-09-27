@@ -77,7 +77,7 @@ function generateTransactionListReport(year, month) {
 
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Report_TransactionList');
   sheet.clear();
-  const headers = ['日付', '内容', '金額', '種別', '金融機関', 'カテゴリ', 'メモ'];
+  const headers = ['日付', '内容', '金額', '種別', '金融機関', 'カテゴリ', 'メモ', '残高'];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
   sheet.getRange(2, 1, transactions.length, transactions[0].length).setValues(transactions);
 
@@ -93,7 +93,7 @@ function generateTransactionListReport(year, month) {
  */
 function getTransactionsForMonth(year, month) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.DB_TRANSACTIONS);
-  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
+  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues();
 
   const filteredData = allData.filter(row => {
     if (!row[0] || !(row[0] instanceof Date)) return false;
@@ -108,64 +108,58 @@ function getTransactionsForMonth(year, month) {
  * 全期間の取引データから資産推移を計算し、グラフを生成する
  */
 function generateAssetTransitionGraph() {
-  // 1. 口座情報を取得し、初期残高の合計と最も古い基準日を特定
-  const accounts = getAccounts();
-  if (accounts.length === 0) {
-    SpreadsheetApp.getUi().alert('口座情報が未登録です。Accountsシートに初期残高を登録してください。');
-    return;
-  }
-
-  let totalInitialBalance = 0;
-  let oldestInitialDate = new Date();
-  accounts.forEach(acc => {
-    const balance = acc[1];
-    const date = new Date(acc[2]);
-    totalInitialBalance += balance;
-    if (date < oldestInitialDate) {
-      oldestInitialDate = date;
-    }
-  });
-
-  // 2. 全取引履歴を取得し、基準日以降のものをフィルタリング
+  // 1. 全取引履歴を取得
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.DB_TRANSACTIONS);
   if (sheet.getLastRow() < 2) {
     SpreadsheetApp.getUi().alert('取引データがありません。');
     return;
   }
-  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 7).getValues();
-  const filteredData = allData.filter(tx => new Date(tx[0]) >= oldestInitialDate);
+  // 日付(0), 金融機関(4), 残高(7) の列を取得
+  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues();
 
-  // 3. 月末ごとの残高を計算
-  const monthlyBalances = {};
-  let currentBalance = totalInitialBalance;
+  // 2. 残高情報がある取引のみフィルタリング
+  const balanceTransactions = allData.filter(tx => tx[7] !== null && tx[7] !== '');
+  if (balanceTransactions.length === 0) {
+    SpreadsheetApp.getUi().alert('残高情報を含む取引データがありません。資産推移グラフは生成できません。');
+    return;
+  }
 
-  // まず全取引を日付でソート
-  filteredData.sort((a, b) => new Date(a[0]) - new Date(b[0]));
+  // 3. 日付でソート
+  balanceTransactions.sort((a, b) => new Date(a[0]) - new Date(b[0]));
 
-  // 計算開始月の月初残高を設定
-  const startMonthKey = `${oldestInitialDate.getFullYear()}-${('0' + (oldestInitialDate.getMonth() + 1)).slice(-2)}`;
-  monthlyBalances[startMonthKey] = totalInitialBalance;
+  // 4. 日付ごとの各金融機関の最終残高を記録
+  const dailyLastBalances = {}; // { 'YYYY-MM-DD': { '金融機関A': 1000, '金融機関B': 2000 }, ... }
+  const uniqueDates = [...new Set(balanceTransactions.map(tx => Utilities.formatDate(new Date(tx[0]), 'JST', 'yyyy-MM-dd')))];
+  
+  uniqueDates.forEach(dateStr => {
+    dailyLastBalances[dateStr] = {};
+    const targetDate = new Date(dateStr);
 
-  filteredData.forEach(tx => {
-    const date = new Date(tx[0]);
-    const amount = tx[2];
-    const type = tx[3];
+    // その日までの取引に絞り込み
+    const upToDateTxs = balanceTransactions.filter(tx => new Date(tx[0]) <= targetDate);
 
-    if (type === '収入') {
-      currentBalance += amount;
-    } else {
-      currentBalance -= amount;
-    }
-
-    const monthKey = `${date.getFullYear()}-${('0' + (date.getMonth() + 1)).slice(-2)}`;
-    monthlyBalances[monthKey] = currentBalance;
+    // 各金融機関の最新の残高を取得
+    const latestBalances = {};
+    upToDateTxs.forEach(tx => {
+      const institution = tx[4];
+      const balance = tx[7];
+      latestBalances[institution] = balance; // 日付でソート済みなので、最後のものが最新
+    });
+    dailyLastBalances[dateStr] = latestBalances;
   });
 
-  // 4. データをシート出力用に整形
-  const chartData = Object.keys(monthlyBalances).sort().map(key => [key, monthlyBalances[key]]);
-  chartData.unshift(['年月', '月末残高']); // ヘッダーを追加
+  // 5. 日付ごとの合計残高を計算
+  const chartData = [['日付', '総資産残高']];
+  for (const dateStr in dailyLastBalances) {
+    let totalBalance = 0;
+    const balances = dailyLastBalances[dateStr];
+    for (const institution in balances) {
+      totalBalance += balances[institution];
+    }
+    chartData.push([new Date(dateStr), totalBalance]);
+  }
 
-  // 5. シートに出力してグラフを作成
+  // 6. シートに出力してグラフを作成
   const reportSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Report_AssetTransition');
   reportSheet.clear();
   reportSheet.getRange(1, 1, chartData.length, 2).setValues(chartData);
@@ -177,6 +171,7 @@ function generateAssetTransitionGraph() {
     .addRange(reportSheet.getRange('A1:B' + chartData.length))
     .setPosition(3, 3, 0, 0)
     .setOption('title', '資産推移グラフ')
+    .setOption('hAxis.format', 'yyyy/MM/dd')
     .build();
 
   reportSheet.insertChart(chart);
