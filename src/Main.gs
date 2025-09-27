@@ -32,6 +32,30 @@ function showCsvImportDialog() {
   });
 
   const htmlContent = `
+    <style>
+      .loading-overlay {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(255, 255, 255, 0.8);
+        display: flex; justify-content: center; align-items: center;
+        z-index: 10;
+        display: none; /* 初期状態では非表示 */
+      }
+      .loader {
+        border: 5px solid #f3f3f3;
+        border-top: 5px solid #3498db;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    </style>
+    <div id="loader-overlay" class="loading-overlay">
+      <div class="loader"></div>
+    </div>
     <form id="csv-form">
       <p><b>1. フォーマットを選択</b></p>
       <select name="formatName" id="formatName">
@@ -44,12 +68,17 @@ function showCsvImportDialog() {
     </form>
     <script>
       function processForm() {
+        // ローディング画面を表示
+        document.getElementById('loader-overlay').style.display = 'flex';
+
         const form = document.getElementById('csv-form');
-        // ボタンを無効化して二重送信を防ぐ
-        this.disabled = true;
         google.script.run
           .withSuccessHandler(google.script.host.close)
-          .withFailureHandler(err => { alert('インポートに失敗しました: ' + err.message); google.script.host.close(); })
+          .withFailureHandler(err => { 
+            // エラー時もローディングを消してダイアログを閉じる
+            google.script.host.close(); 
+            alert('インポートに失敗しました: ' + err.message);
+          })
           .importCsv(form);
       }
     </script>
