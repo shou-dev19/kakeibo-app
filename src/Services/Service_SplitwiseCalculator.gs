@@ -10,37 +10,51 @@
  * @returns {number} 割り勘対象の合計金額
  */
 function calculateSplitwiseTotal(year, month) {
-  // 1. 割り勘キーワードを取得
+  // 1. キーワードを取得
   const keywords = getSplitwiseKeywords();
-  if (keywords.length === 0) {
-    SpreadsheetApp.getUi().alert('割り勘対象のキーワードが設定されていません。Settingsシートで定義してください。');
-    return { total: 0, transactions: [] };
+  if (keywords.split.length === 0 && keywords.full.length === 0) {
+    SpreadsheetApp.getUi().alert('割り勘・全額請求のキーワードが設定されていません。Settings_Splitwiseシートで定義してください。');
+    return { splitTotal: 0, fullTotal: 0, transactions: [] };
   }
 
   // 2. 指定年月の取引を取得
   const transactions = getTransactionsForMonth(year, month);
   if (transactions.length === 0) {
-    return { total: 0, transactions: [] };
+    return { splitTotal: 0, fullTotal: 0, transactions: [] };
   }
 
-  // 3. キーワードに合致する取引（支出のみ）をフィルタリング
-  const splitwiseTransactions = [];
-  let total = 0;
+  // 3. キーワードに合致する取引を分類・集計
+  const resultTransactions = [];
+  let splitTotal = 0;
+  let fullTotal = 0;
+
   transactions.forEach(tx => {
     const description = tx[1];
     const amount = tx[2];
     const type = tx[3];
+    const category = tx[5];
 
-    if (type === '支出') {
-      for (const keyword of keywords) {
+    if (type === '支出' && category !== '振替') {
+      // 全額請求キーワードを優先
+      for (const keyword of keywords.full) {
         if (description.includes(keyword)) {
-          total += amount;
-          splitwiseTransactions.push(tx);
-          break; // 該当したら次の取引へ
+          fullTotal += amount;
+          tx.push('全額請求'); // 計算タイプを追記
+          resultTransactions.push(tx);
+          return; // 次の取引へ
+        }
+      }
+      // 割り勘キーワードをチェック
+      for (const keyword of keywords.split) {
+        if (description.includes(keyword)) {
+          splitTotal += amount;
+          tx.push('割り勘'); // 計算タイプを追記
+          resultTransactions.push(tx);
+          return; // 次の取引へ
         }
       }
     }
   });
 
-  return { total: total, transactions: splitwiseTransactions };
+  return { splitTotal, fullTotal, transactions: resultTransactions };
 }

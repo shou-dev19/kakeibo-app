@@ -256,21 +256,39 @@ function showSplitwiseDialog() {
   }
 
   const result = calculateSplitwiseTotal(year, month);
-  const total = result.total;
+  const splitTotal = result.splitTotal;
+  const fullTotal = result.fullTotal;
   const transactions = result.transactions;
+  const finalAmount = (splitTotal / 2) + fullTotal;
 
   // Report_Splitwiseシートに出力
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Report_Splitwise');
   sheet.clear();
-  sheet.getRange('A1').setValue(`${year}年${month}月 割り勘対象リスト`);
+  sheet.getRange('A1').setValue(`${year}年${month}月 割り勘・立替 計算結果`);
+
+  // サマリー情報を出力
+  const summaryData = [
+    ['割り勘対象 (50%)', splitTotal],
+    ['全額請求対象 (100%)', fullTotal],
+    ['請求額 (割り勘/2 + 全額)', finalAmount]
+  ];
+  sheet.getRange(3, 1, 3, 2).setValues(summaryData).setFontWeight('bold');
+
   if (transactions.length > 0) {
-    const headers = ['日付', '内容', '金額', '種別', 'カテゴリ', 'メモ'];
-    sheet.getRange(3, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(4, 1, transactions.length, transactions[0].length).setValues(transactions);
+    const headers = ['日付', '内容', '金額', '種別', '金融機関', 'カテゴリ', 'メモ', '残高', '計算タイプ'];
+    sheet.getRange(7, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(8, 1, transactions.length, transactions[0].length).setValues(transactions);
   }
 
-  const perPerson = total / 2; // 2人で割ることを想定
-  ui.alert(`${year}年${month}月の割り勘対象合計: ${total}円\n\n1人あたり: ${perPerson}円\n\n詳細は「Report_Splitwise」シートに出力しました。`);
+  const message = `${year}年${month}月の計算結果:\n` +
+                  `--------------------\n` +
+                  `割り勘対象 (50%): ${splitTotal} 円\n` +
+                  `全額請求対象 (100%): ${fullTotal} 円\n` +
+                  `--------------------\n` +
+                  `請求額 (割り勘/2 + 全額): ${finalAmount} 円\n\n` +
+                  `詳細は「Report_Splitwise」シートに出力しました。`;
+
+  ui.alert(message);
 }
 
 
@@ -309,14 +327,25 @@ function initializeSheets() {
     sheet.getRange(2, 1, rules.length, rules[0].length).setValues(rules);
     SpreadsheetApp.getUi().alert(`「${settingsSheetName}」シートを作成し、サンプルルールを定義しました。`);
 
-    // 割り勘キーワードのセクションを追加
-    const splitwiseHeader = ['割り勘対象キーワード'];
-    const splitwiseKeywords = [['割り勘'], ['立替']];
-    sheet.getRange(1, 4, 1, 1).setValue(splitwiseHeader);
-    sheet.getRange(2, 4, splitwiseKeywords.length, 1).setValues(splitwiseKeywords);
-
   } else {
     SpreadsheetApp.getUi().alert(`「${settingsSheetName}」シートは既に存在します。`);
+  }
+
+  // Settings_Splitwiseシートの作成
+  const splitwiseSettingsSheetName = 'Settings_Splitwise';
+  sheet = spreadsheet.getSheetByName(splitwiseSettingsSheetName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(splitwiseSettingsSheetName);
+    const headers = ['割り勘キーワード (50%)', '全額請求キーワード (100%)'];
+    const sampleKeywords = [
+      ['割り勘', '立替'],
+      ['ワリカン', '']
+    ];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(2, 1, sampleKeywords.length, sampleKeywords[0].length).setValues(sampleKeywords);
+    SpreadsheetApp.getUi().alert(`「${splitwiseSettingsSheetName}」シートを作成し、サンプルキーワードを定義しました。`);
+  } else {
+    SpreadsheetApp.getUi().alert(`「${splitwiseSettingsSheetName}」シートは既に存在します。`);
   }
 
   // Settings_CsvFormatsシートの作成とヘッダー設定

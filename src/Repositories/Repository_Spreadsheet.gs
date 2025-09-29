@@ -84,25 +84,26 @@ function getCsvFormats() {
 
 
 /**
- * Settingsシートから割り勘キーワードを取得する
- * @returns {Array<string>} 割り勘キーワードの配列
+ * Settings_Splitwiseシートからキーワードを取得する
+ * @returns {{split: Array<string>, full: Array<string>}} 割り勘と全額請求のキーワードオブジェクト
  */
 function getSplitwiseKeywords() {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.SETTINGS);
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Settings_Splitwise');
     if (!sheet) {
-      throw new Error(`シート「${SHEET_NAMES.SETTINGS}」が見つかりません。`);
+      throw new Error('シート「Settings_Splitwise」が見つかりません。');
     }
-    // D列の2行目から最後まで読み込む
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) {
-      return [];
+      return { split: [], full: [] };
     }
-    const keywords = sheet.getRange(2, 4, lastRow - 1, 1).getValues()
-      .flat() // 2次元配列を1次元に変換
-      .filter(Boolean); // 空のセルを除外
-    console.log(`${keywords.length}件の割り勘キーワードを取得しました。`);
-    return keywords;
+    const data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
+    const splitKeywords = data.map(row => row[0]).filter(Boolean);
+    const fullKeywords = data.map(row => row[1]).filter(Boolean);
+    
+    console.log(`割り勘キーワード: ${splitKeywords.length}件, 全額請求キーワード: ${fullKeywords.length}件を取得しました。`);
+    return { split: splitKeywords, full: fullKeywords };
+
   } catch (e) {
     console.error('割り勘キーワードの取得に失敗しました。', e);
     throw e;
