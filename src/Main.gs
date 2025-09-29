@@ -16,7 +16,24 @@ function onOpen() {
       .addItem('割り勘計算', 'showSplitwiseDialog')
       .addSeparator()
       .addItem('分類ルールをCSVから更新', 'updateRulesFromCsv')
+      .addSeparator()
+      .addItem('全取引のカテゴリを再分類', 'showRecategorizeDialog')
       .addToUi();
+}
+
+/**
+ * 全取引の再分類を実行する前に確認ダイアログを表示する
+ */
+function showRecategorizeDialog() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert(
+    '確認',
+    'DB_Transactionsシートにある全取引のカテゴリを、最新のルールで上書きします。この操作は元に戻せません。\n\n本当に実行しますか？',
+    ui.ButtonSet.OK_CANCEL);
+
+  if (response == ui.Button.OK) {
+    reCategorizeAllTransactions();
+  }
 }
 
 /**

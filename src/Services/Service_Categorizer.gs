@@ -47,3 +47,43 @@ function categorizeTransactions(transactions) {
   console.log(`${categorizedTransactions.length}件の取引データをカテゴリ分類しました。`);
   return categorizedTransactions;
 }
+
+/**
+ * DB_Transactionsシートのすべての取引を、最新のルールで再分類する
+ */
+function reCategorizeAllTransactions() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.DB_TRANSACTIONS);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    SpreadsheetApp.getUi().alert('取引データがありません。');
+    return;
+  }
+
+  const range = sheet.getRange(2, 1, lastRow - 1, 8); // 全8列を取得
+  const transactions = range.getValues();
+  const rules = getCategoryRules();
+
+  if (rules.length === 0) {
+    SpreadsheetApp.getUi().alert('カテゴリ分類ルールが設定されていません。');
+    return;
+  }
+
+  const updatedTransactions = transactions.map(transaction => {
+    const description = transaction[1];
+    let category = '未分類';
+
+    for (const rule of rules) {
+      const keyword = rule[0];
+      const assignedCategory = rule[1];
+      if (description.includes(keyword)) {
+        category = assignedCategory;
+        break;
+      }
+    }
+    transaction[5] = category; // カテゴリ列（6番目、index 5）を更新
+    return transaction;
+  });
+
+  range.setValues(updatedTransactions);
+  SpreadsheetApp.getUi().alert(`全${updatedTransactions.length}件の取引カテゴリを更新しました。`);
+}
