@@ -94,66 +94,51 @@ function showCsvImportDialog() {
  * @param {Object} formObject - ファイル入力フォームオブジェクト
  */
 function importCsv(formObject) {
-  const debugSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Debug_Log');
-  debugSheet.clear();
-  debugSheet.appendRow(['Timestamp', 'Type', 'Message', 'Data']);
-  
-  const log = (type, message, data) => {
-    const timestamp = new Date();
-    debugSheet.appendRow([timestamp, type, message, data ? JSON.stringify(data, null, 2) : '']);
-  };
-
   try {
-    log('INFO', 'Import process started.');
     const fileBlob = formObject.csvFile;
     const formatName = formObject.formatName;
 
-    if (!fileBlob) throw new Error('ファイルが選択されていません。');
-    log('INFO', 'File blob received.');
+    if (!fileBlob) {
+      throw new Error('ファイルが選択されていません。');
+    }
+    if (!formatName) {
+      throw new Error('CSVフォーマットが選択されていません。');
+    }
 
-    if (!formatName) throw new Error('CSVフォーマットが選択されていません。');
-    log('INFO', `Format name: ${formatName}`);
-
+    // 対応するフォーマット定義を検索
     const formats = getCsvFormats();
     const selectedFormat = formats.find(f => f[0] === formatName);
-    if (!selectedFormat) throw new Error(`定義されていないCSVフォーマットです: ${formatName}`);
-    log('INFO', 'Format definition found.', selectedFormat);
+
+    if (!selectedFormat) {
+      throw new Error(`定義されていないCSVフォーマットです: ${formatName}`);
+    }
 
     // 古い7列の定義を補完する
     if (selectedFormat.length === 7) {
       selectedFormat.splice(5, 0, ''); // 5番目の位置（BalanceColumn）に空文字を挿入
-      log('INFO', 'Old format definition detected and patched.', selectedFormat);
     }
 
     const encoding = selectedFormat[7];
-    log('INFO', `Encoding to be used: ${encoding}`);
     const csvData = fileBlob.getDataAsString(encoding);
-    log('INFO', 'CSV data read as string.');
 
+    // 1. CSVを解析
     const parsedData = parseCsv(csvData, selectedFormat);
-    log('INFO', `CSV parsing complete. ${parsedData.length} records parsed.`, parsedData);
-    if (!parsedData || parsedData.length === 0) {
+    if (parsedData.length === 0) {
       SpreadsheetApp.getUi().alert('CSVから有効なデータを読み取れませんでした。');
       return;
     }
 
+    // 2. カテゴリを分類
     const categorizedData = categorizeTransactions(parsedData);
-    log('INFO', `Categorization complete. ${categorizedData.length} records categorized.`, categorizedData);
-    if (!categorizedData || categorizedData.length === 0) {
-      SpreadsheetApp.getUi().alert('カテゴリ分類後のデータがありません。');
-      return;
-    }
 
-    log('INFO', 'Appending data to sheet...');
+    // 3. スプレッドシートに追記
     appendTransactions(categorizedData);
-    log('INFO', 'Append successful.');
 
     SpreadsheetApp.getUi().alert(`${categorizedData.length}件のデータをインポートしました。`);
 
   } catch (e) {
-    const detailedError = `Message: ${e.message}\nFile: ${e.fileName}\nLine: ${e.lineNumber}\nStack: ${e.stack}`;
-    log('ERROR', 'An error occurred during import.', detailedError);
-    SpreadsheetApp.getUi().alert("インポート処理中に回復不能なエラーが発生しました。'Debug_Log'シートを確認し、内容を開発者に伝えてください。");
+    // エラーをクライアントに投げる
+    throw new Error('インポート処理中にエラーが発生しました: ' + e.message);
   }
 }
 
@@ -234,16 +219,6 @@ function showSplitwiseDialog() {
  */
 function initializeSheets() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-
-  // Debug_Logシートの作成
-  const debugSheetName = 'Debug_Log';
-  let sheet = spreadsheet.getSheetByName(debugSheetName);
-  if (!sheet) {
-    sheet = spreadsheet.insertSheet(debugSheetName, 0);
-    sheet.clear();
-    sheet.appendRow(['Timestamp', 'Type', 'Message', 'Data']);
-  }
-
 
   // DB_Transactionsシートの作成とヘッダー設定
   const transactionsSheetName = 'DB_Transactions';
