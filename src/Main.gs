@@ -14,7 +14,53 @@ function onOpen() {
       .addItem('資産推移グラフを生成', 'generateAssetTransitionGraph')
       .addSeparator()
       .addItem('割り勘計算', 'showSplitwiseDialog')
+      .addSeparator()
+      .addItem('分類ルールをCSVから更新', 'updateRulesFromCsv')
       .addToUi();
+}
+
+/**
+ * スクリプトプロパティで指定されたCSVファイルから分類ルールを読み込み、Settingsシートを更新する
+ */
+function updateRulesFromCsv() {
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const csvFileId = properties.getProperty('RULE_CSV_FILE_ID');
+
+    if (!csvFileId) {
+      throw new Error('ルールCSVのファイルIDがスクリプトプロパティに設定されていません。(プロパティ名: RULE_CSV_FILE_ID)');
+    }
+
+    const csvFile = DriveApp.getFileById(csvFileId);
+    const csvData = csvFile.getBlob().getDataAsString('UTF-8');
+    const records = Utilities.parseCsv(csvData);
+
+    const newRules = [];
+    records.forEach(record => {
+      const category = record[0];
+      // 2列目以降のキーワードをルールとして追加
+      for (let i = 1; i < record.length; i++) {
+        if (record[i]) { // 空のキーワードは無視
+          newRules.push([record[i], category]);
+        }
+      }
+    });
+
+    if (newRules.length === 0) {
+      throw new Error('CSVから有効なルールを読み取れませんでした。');
+    }
+
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Settings');
+    // 既存のルールをクリア（ヘッダーは残す）
+    sheet.getRange('A2:B' + Math.max(sheet.getLastRow(), 2)).clearContent();
+    // 新しいルールを書き込み
+    sheet.getRange(2, 1, newRules.length, 2).setValues(newRules);
+
+    SpreadsheetApp.getUi().alert('新しいカテゴリ分類ルールをSettingsシートに書き込みました。');
+
+  } catch (e) {
+    SpreadsheetApp.getUi().alert('ルールの更新に失敗しました: ' + e.message);
+  }
 }
 
 /**
