@@ -25,6 +25,11 @@ function generateMonthlySummaryReport(year, month) {
     const type = tx[3]; // 種別列
     const category = tx[5] || '未分類'; // カテゴリ列
 
+    // 「振替」カテゴリは収支計算から除外
+    if (category === '振替') {
+      return; // 次の取引へ
+    }
+
     if (type === '収入') {
       totalIncome += amount;
     } else { // 支出または未定義
@@ -59,6 +64,20 @@ function generateMonthlySummaryReport(year, month) {
     sheet.getRange(row, 1, 1, 2).setValues([[category, summary[category]]]);
     row++;
   }
+
+  // 既存のグラフを削除
+  sheet.getCharts().forEach(chart => sheet.removeChart(chart));
+
+  // 円グラフを作成
+  const chartRange = sheet.getRange(`A${row - Object.keys(summary).length}:B${row - 1}`);
+  const pieChart = sheet.newChart()
+    .setChartType(Charts.ChartType.PIE)
+    .addRange(chartRange)
+    .setPosition(3, 4, 0, 0) // C3セルあたりに配置
+    .setOption('title', 'カテゴリ別支出割合')
+    .build();
+
+  sheet.insertChart(pieChart);
 
   SpreadsheetApp.getUi().alert('月次サマリーレポートを生成しました。');
 }
