@@ -21,7 +21,13 @@
  * 指定されたGoogle Driveのルートフォルダ配下を再帰的に探索し、新しいCSVファイルがあればインポート処理を実行する。
  */
 function checkDriveFolderForNewFiles() {
-  const rootFolderId = 'YOUR_GOOGLE_DRIVE_ROOT_FOLDER_ID'; // TODO: 監視対象のルートフォルダID（例: csv-import）に書き換える
+  const properties = PropertiesService.getScriptProperties();
+  const rootFolderId = properties.getProperty('DRIVE_ROOT_FOLDER_ID');
+
+  if (!rootFolderId) {
+    console.error('監視対象のルートフォルダIDがスクリプトプロパティに設定されていません。プロパティ名: DRIVE_ROOT_FOLDER_ID');
+    return;
+  }
 
   try {
     const rootFolder = DriveApp.getFolderById(rootFolderId);
@@ -85,9 +91,14 @@ function processFile(file, formatName) {
       return false;
     }
 
+    // 古い7列の定義を補完する
+    if (selectedFormat.length === 7) {
+      selectedFormat.splice(5, 0, ''); // 5番目の位置（BalanceColumn）に空文字を挿入
+    }
+
     console.log(`ファイル「${fileName}」をフォーマット「${formatName}」でインポートします。`);
 
-    const encoding = selectedFormat[6];
+    const encoding = selectedFormat[7];
     const csvData = fileBlob.getDataAsString(encoding);
 
     // 1. CSVを解析
