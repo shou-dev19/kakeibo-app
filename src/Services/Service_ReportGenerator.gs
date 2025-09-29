@@ -10,6 +10,8 @@
  */
 function generateMonthlySummaryReport(year, month) {
   const transactions = getTransactionsForMonth(year, month);
+  const excludeCategories = getExcludeFromBalanceCategories();
+
   if (transactions.length === 0) {
     SpreadsheetApp.getUi().alert(`${year}年${month}月の取引データはありません。`);
     return;
@@ -22,11 +24,11 @@ function generateMonthlySummaryReport(year, month) {
 
   transactions.forEach(tx => {
     const amount = tx[2];
-    const type = tx[3]; // 種別列
-    const category = tx[5] || '未分類'; // カテゴリ列
+    const type = tx[3];
+    const category = tx[5] || '未分類';
 
-    // 「振替」カテゴリは収支計算から除外
-    if (category === '振替') {
+    // 「振替」カテゴリと「除外指定カテゴリ」はすべての計算から除外
+    if (category === '振替' || excludeCategories.includes(category)) {
       return; // 次の取引へ
     }
 

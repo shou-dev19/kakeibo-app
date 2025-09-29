@@ -325,6 +325,13 @@ function initializeSheets() {
     ];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.getRange(2, 1, rules.length, rules[0].length).setValues(rules);
+
+    // 収支計算から除外するカテゴリのセクションを追加
+    const excludeHeader = ['収支から除外するカテゴリ'];
+    const excludeCategories = [['投資']];
+    sheet.getRange(1, 5, 1, 1).setValue(excludeHeader);
+    sheet.getRange(2, 5, excludeCategories.length, 1).setValues(excludeCategories);
+
     SpreadsheetApp.getUi().alert(`「${settingsSheetName}」シートを作成し、サンプルルールを定義しました。`);
 
   } else {
