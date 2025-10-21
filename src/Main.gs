@@ -12,6 +12,7 @@ function onOpen() {
       .addSeparator()
       .addItem('月次レポートを生成', 'showGenerateReportDialog')
       .addItem('資産推移グラフを生成', 'generateAssetTransitionGraph')
+      .addItem('保有資産レポート', 'generatePortfolioReport')
       .addSeparator()
       .addItem('割り勘計算', 'showSplitwiseDialog')
       .addSeparator()
@@ -300,6 +301,7 @@ function showSplitwiseDialog() {
  */
 function initializeSheets() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet;
 
   // DB_Transactionsシートの作成とヘッダー設定
   const transactionsSheetName = 'DB_Transactions';
@@ -369,6 +371,16 @@ function initializeSheets() {
     SpreadsheetApp.getUi().alert(`「${securitiesSheetName}」シートは既に存在します。`);
   }
 
+  // Report_Portfolioシートの作成
+  const portfolioSheetName = 'Report_Portfolio';
+  sheet = spreadsheet.getSheetByName(portfolioSheetName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(portfolioSheetName);
+    SpreadsheetApp.getUi().alert(`「${portfolioSheetName}」シートを作成しました。`);
+  } else {
+    SpreadsheetApp.getUi().alert(`「${portfolioSheetName}」シートは既に存在します。`);
+  }
+
   // Settings_CsvFormatsシートの作成とヘッダー設定
   const formatsSheetName = 'Settings_CsvFormats';
   sheet = spreadsheet.getSheetByName(formatsSheetName);
@@ -422,5 +434,4 @@ function initializeSheets() {
   } else {
     SpreadsheetApp.getUi().alert(`「${splitwiseSheetName}」シートは既に存在します。`);
   }
-
 }
