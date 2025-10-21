@@ -129,58 +129,65 @@ function getTransactionsForMonth(year, month) {
  * 全期間の取引データから資産推移を計算し、グラフを生成する
  */
 function generateAssetTransitionGraph() {
-  // 1. 全取引履歴を取得
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.DB_TRANSACTIONS);
-  if (sheet.getLastRow() < 2) {
-    SpreadsheetApp.getUi().alert('取引データがありません。');
+  // 1. 預金残高の履歴を取得
+  const bankTxSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.DB_TRANSACTIONS);
+  const bankTransactions = (bankTxSheet.getLastRow() < 2) ? [] : 
+    bankTxSheet.getRange(2, 1, bankTxSheet.getLastRow() - 1, 8).getValues()
+      .filter(tx => tx[7] !== null && tx[7] !== '');
+
+  // 2. 証券残高の履歴を取得
+  const securitiesSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DB_Securities');
+  const securitiesHistory = (securitiesSheet.getLastRow() < 2) ? [] : 
+    securitiesSheet.getRange(2, 1, securitiesSheet.getLastRow() - 1, 3).getValues();
+
+  if (bankTransactions.length === 0 && securitiesHistory.length === 0) {
+    SpreadsheetApp.getUi().alert('残高データがありません。資産推移グラフは生成できません。');
     return;
   }
-  // 日付(0), 金融機関(4), 残高(7) の列を取得
-  const allData = sheet.getRange(2, 1, sheet.getLastRow() - 1, 8).getValues();
 
-  // 2. 残高情報がある取引のみフィルタリング
-  const balanceTransactions = allData.filter(tx => tx[7] !== null && tx[7] !== '');
-  if (balanceTransactions.length === 0) {
-    SpreadsheetApp.getUi().alert('残高情報を含む取引データがありません。資産推移グラフは生成できません。');
-    return;
-  }
+  // 3. 全ての日付を洗い出し、ユニークでソートされた日付リストを作成
+  const allDates = [
+    ...bankTransactions.map(tx => new Date(tx[0])),
+    ...securitiesHistory.map(h => new Date(h[0]))
+  ];
+  const uniqueDateStrings = [...new Set(allDates.map(d => Utilities.formatDate(d, 'JST', 'yyyy-MM-dd')))].sort();
 
-  // 3. 日付でソート
-  balanceTransactions.sort((a, b) => new Date(a[0]) - new Date(b[0]));
+  // 4. 日付ごとの総資産を計算
+  const dailyTotalAssets = [];
+  let lastBankBalances = {};
+  let lastSecuritiesBalances = {};
 
-  // 4. 日付ごとの各金融機関の最終残高を記録
-  const dailyLastBalances = {}; // { 'YYYY-MM-DD': { '金融機関A': 1000, '金融機関B': 2000 }, ... }
-  const uniqueDates = [...new Set(balanceTransactions.map(tx => Utilities.formatDate(new Date(tx[0]), 'JST', 'yyyy-MM-dd')))];
-  
-  uniqueDates.forEach(dateStr => {
-    dailyLastBalances[dateStr] = {};
+  for (const dateStr of uniqueDateStrings) {
     const targetDate = new Date(dateStr);
 
-    // その日までの取引に絞り込み
-    const upToDateTxs = balanceTransactions.filter(tx => new Date(tx[0]) <= targetDate);
-
-    // 各金融機関の最新の残高を取得
-    const latestBalances = {};
-    upToDateTxs.forEach(tx => {
-      const institution = tx[4];
-      const balance = tx[7];
-      latestBalances[institution] = balance; // 日付でソート済みなので、最後のものが最新
+    // その日までの銀行取引から各口座の最新残高を更新
+    bankTransactions.forEach(tx => {
+      if (new Date(tx[0]) <= targetDate) {
+        const institution = tx[4];
+        const balance = tx[7];
+        lastBankBalances[institution] = balance;
+      }
     });
-    dailyLastBalances[dateStr] = latestBalances;
-  });
 
-  // 5. 日付ごとの合計残高を計算
-  const chartData = [['日付', '総資産残高']];
-  for (const dateStr in dailyLastBalances) {
-    let totalBalance = 0;
-    const balances = dailyLastBalances[dateStr];
-    for (const institution in balances) {
-      totalBalance += balances[institution];
-    }
-    chartData.push([new Date(dateStr), totalBalance]);
+    // その日までの証券履歴から各証券会社の最新評価額を更新
+    securitiesHistory.forEach(h => {
+      if (new Date(h[0]) <= targetDate) {
+        const brokerage = h[1];
+        const value = h[2];
+        lastSecuritiesBalances[brokerage] = value;
+      }
+    });
+
+    // 合計を計算
+    const totalBankBalance = Object.values(lastBankBalances).reduce((sum, b) => sum + b, 0);
+    const totalSecuritiesBalance = Object.values(lastSecuritiesBalances).reduce((sum, v) => sum + v, 0);
+    const totalAssets = totalBankBalance + totalSecuritiesBalance;
+    
+    dailyTotalAssets.push([targetDate, totalAssets]);
   }
 
-  // 6. シートに出力してグラフを作成
+  // 5. シートに出力してグラフを作成
+  const chartData = [['日付', '総資産残高'], ...dailyTotalAssets];
   const reportSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Report_AssetTransition');
   reportSheet.clear();
   reportSheet.getRange(1, 1, chartData.length, 2).setValues(chartData);
@@ -191,10 +198,10 @@ function generateAssetTransitionGraph() {
     .setChartType(Charts.ChartType.LINE)
     .addRange(reportSheet.getRange('A1:B' + chartData.length))
     .setPosition(3, 3, 0, 0)
-    .setOption('title', '資産推移グラフ')
+    .setOption('title', '総資産推移グラフ')
     .setOption('hAxis.format', 'yyyy/MM/dd')
     .build();
 
   reportSheet.insertChart(chart);
-  SpreadsheetApp.getUi().alert('資産推移グラフを生成しました。');
+  SpreadsheetApp.getUi().alert('総資産推移グラフを生成しました。');
 }

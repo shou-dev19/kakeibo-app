@@ -355,6 +355,20 @@ function initializeSheets() {
     SpreadsheetApp.getUi().alert(`「${splitwiseSettingsSheetName}」シートは既に存在します。`);
   }
 
+  // DB_Securitiesシートの作成
+  const securitiesSheetName = 'DB_Securities';
+  sheet = spreadsheet.getSheetByName(securitiesSheetName);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(securitiesSheetName);
+    const headers = ['日付', '証券会社名', '評価額'];
+    const sampleData = [[new Date('2025-01-01'), 'SBI証券', 1000000]];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(2, 1, sampleData.length, sampleData[0].length).setValues(sampleData);
+    SpreadsheetApp.getUi().alert(`「${securitiesSheetName}」シートを作成し、サンプルデータを定義しました。`);
+  } else {
+    SpreadsheetApp.getUi().alert(`「${securitiesSheetName}」シートは既に存在します。`);
+  }
+
   // Settings_CsvFormatsシートの作成とヘッダー設定
   const formatsSheetName = 'Settings_CsvFormats';
   sheet = spreadsheet.getSheetByName(formatsSheetName);
