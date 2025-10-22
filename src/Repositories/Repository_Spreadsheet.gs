@@ -1,12 +1,18 @@
-
 /**
  * @fileoverview スプレッドシートへのデータアクセスを担当するリポジトリ層のモジュール
  */
 
 const SHEET_NAMES = {
-  DB_TRANSACTIONS: 'DB_Transactions',
-  SETTINGS: 'Settings',
-  SETTINGS_CSV_FORMATS: 'Settings_CsvFormats'
+  DB_TRANSACTIONS: '取引履歴DB',
+  DB_SECURITIES: '証券残高DB',
+  SETTINGS: '分類・除外設定',
+  SETTINGS_CSV_FORMATS: 'CSVフォーマット設定',
+  SETTINGS_SPLITWISE: '割り勘キーワード設定',
+  REPORT_MONTHLY_SUMMARY: '月次レポート',
+  REPORT_TRANSACTION_LIST: '月次明細一覧',
+  REPORT_ASSET_TRANSITION: '総資産推移グラフ',
+  REPORT_SPLITWISE: '割り勘計算レポート',
+  REPORT_PORTFOLIO: '資産ポートフォリオ'
 };
 
 /**
@@ -66,7 +72,7 @@ function getCsvFormats() {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = spreadsheet.getSheetByName(SHEET_NAMES.SETTINGS_CSV_FORMATS);
     if (!sheet) {
-      throw new Error(`シート「Settings_CsvFormats」が見つかりません。`);
+      throw new Error(`シート「${SHEET_NAMES.SETTINGS_CSV_FORMATS}」が見つかりません。`);
     }
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) {
@@ -81,17 +87,15 @@ function getCsvFormats() {
   }
 }
 
-
-
 /**
  * Settings_Splitwiseシートからキーワードを取得する
  * @returns {{split: Array<string>, full: Array<string>}} 割り勘と全額請求のキーワードオブジェクト
  */
 function getSplitwiseKeywords() {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Settings_Splitwise');
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.SETTINGS_SPLITWISE);
     if (!sheet) {
-      throw new Error('シート「Settings_Splitwise」が見つかりません。');
+      throw new Error(`シート「${SHEET_NAMES.SETTINGS_SPLITWISE}」が見つかりません。`);
     }
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) {
@@ -116,7 +120,8 @@ function getSplitwiseKeywords() {
  */
 function getExcludeFromBalanceCategories() {
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.SETTINGS);
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = spreadsheet.getSheetByName(SHEET_NAMES.SETTINGS);
     if (!sheet) {
       throw new Error(`シート「${SHEET_NAMES.SETTINGS}」が見つかりません。`);
     }

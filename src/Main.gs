@@ -1,25 +1,24 @@
-
 /**
  * スプレッドシートを開いたときに実行される特殊関数。
  * UIにカスタムメニューを追加します。
  */
 function onOpen() {
   SpreadsheetApp.getUi()
-      .createMenu('家計簿アプリ')
-      .addItem('初期設定', 'initializeSheets')
-      .addSeparator()
-      .addItem('CSVファイルを手動インポート', 'showCsvImportDialog')
-      .addSeparator()
-      .addItem('月次レポートを生成', 'showGenerateReportDialog')
-      .addItem('資産推移グラフを生成', 'generateAssetTransitionGraph')
-      .addItem('保有資産レポート', 'generatePortfolioReport')
-      .addSeparator()
-      .addItem('割り勘計算', 'showSplitwiseDialog')
-      .addSeparator()
-      .addItem('分類ルールをCSVから更新', 'updateRulesFromCsv')
-      .addSeparator()
-      .addItem('全取引のカテゴリを再分類', 'showRecategorizeDialog')
-      .addToUi();
+    .createMenu("家計簿アプリ")
+    .addItem("初期設定", "initializeSheets")
+    .addSeparator()
+    .addItem("CSVファイルを手動インポート", "showCsvImportDialog")
+    .addSeparator()
+    .addItem("月次レポートを生成", "showGenerateReportDialog")
+    .addItem("資産推移グラフを生成", "generateAssetTransitionGraph")
+    .addItem("保有資産レポート", "generatePortfolioReport")
+    .addSeparator()
+    .addItem("割り勘計算", "showSplitwiseDialog")
+    .addSeparator()
+    .addItem("分類ルールをCSVから更新", "updateRulesFromCsv")
+    .addSeparator()
+    .addItem("全取引のカテゴリを再分類", "showRecategorizeDialog")
+    .addToUi();
 }
 
 /**
@@ -28,9 +27,10 @@ function onOpen() {
 function showRecategorizeDialog() {
   const ui = SpreadsheetApp.getUi();
   const response = ui.alert(
-    '確認',
-    'DB_Transactionsシートにある全取引のカテゴリを、最新のルールで上書きします。この操作は元に戻せません。\n\n本当に実行しますか？',
-    ui.ButtonSet.OK_CANCEL);
+    "確認",
+    `取引履歴DBシートにある全取引のカテゴリを、最新のルールで上書きします。この操作は元に戻せません.\n\n本当に実行しますか？`,
+    ui.ButtonSet.OK_CANCEL
+  );
 
   if (response == ui.Button.OK) {
     reCategorizeAllTransactions();
@@ -43,41 +43,47 @@ function showRecategorizeDialog() {
 function updateRulesFromCsv() {
   try {
     const properties = PropertiesService.getScriptProperties();
-    const csvFileId = properties.getProperty('RULE_CSV_FILE_ID');
+    const csvFileId = properties.getProperty("RULE_CSV_FILE_ID");
 
     if (!csvFileId) {
-      throw new Error('ルールCSVのファイルIDがスクリプトプロパティに設定されていません。(プロパティ名: RULE_CSV_FILE_ID)');
+      throw new Error(
+        "ルールCSVのファイルIDがスクリプトプロパティに設定されていません。(プロパティ名: RULE_CSV_FILE_ID)"
+      );
     }
 
     const csvFile = DriveApp.getFileById(csvFileId);
-    const csvData = csvFile.getBlob().getDataAsString('UTF-8');
+    const csvData = csvFile.getBlob().getDataAsString("UTF-8");
     const records = Utilities.parseCsv(csvData);
 
     const newRules = [];
-    records.forEach(record => {
+    records.forEach((record) => {
       const category = record[0];
       // 2列目以降のキーワードをルールとして追加
       for (let i = 1; i < record.length; i++) {
-        if (record[i]) { // 空のキーワードは無視
+        if (record[i]) {
+          // 空のキーワードは無視
           newRules.push([record[i], category]);
         }
       }
     });
 
     if (newRules.length === 0) {
-      throw new Error('CSVから有効なルールを読み取れませんでした。');
+      throw new Error("CSVから有効なルールを読み取れませんでした。");
     }
 
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Settings');
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(
+      SHEET_NAMES.SETTINGS
+    );
     // 既存のルールをクリア（ヘッダーは残す）
-    sheet.getRange('A2:B' + Math.max(sheet.getLastRow(), 2)).clearContent();
+    sheet.getRange("A2:B" + Math.max(sheet.getLastRow(), 2)).clearContent();
     // 新しいルールを書き込み
     sheet.getRange(2, 1, newRules.length, 2).setValues(newRules);
 
-    SpreadsheetApp.getUi().alert('新しいカテゴリ分類ルールをSettingsシートに書き込みました。');
-
+    SpreadsheetApp.getUi().alert(
+      "新しいカテゴリ分類ルールをSettingsシートに書き込みました。"
+    );
   } catch (e) {
-    SpreadsheetApp.getUi().alert('ルールの更新に失敗しました: ' + e.message);
+    SpreadsheetApp.getUi().alert("ルールの更新に失敗しました: " + e.message);
   }
 }
 
@@ -87,11 +93,11 @@ function updateRulesFromCsv() {
 function showCsvImportDialog() {
   // CSVフォーマット定義を取得
   const formats = getCsvFormats();
-  const formatNames = formats.map(format => format[0]); // FormatNameのリストを作成
+  const formatNames = formats.map((format) => format[0]); // FormatNameのリストを作成
 
   // プルダウンメニューのHTMLを生成
-  let optionsHtml = '';
-  formatNames.forEach(name => {
+  let optionsHtml = "";
+  formatNames.forEach((name) => {
     optionsHtml += `<option value="${name}">${name}</option>`;
   });
 
@@ -148,9 +154,9 @@ function showCsvImportDialog() {
     </script>
   `;
   const html = HtmlService.createHtmlOutput(htmlContent)
-      .setWidth(300)
-      .setHeight(200);
-  SpreadsheetApp.getUi().showModalDialog(html, 'CSVファイルを選択');
+    .setWidth(300)
+    .setHeight(200);
+  SpreadsheetApp.getUi().showModalDialog(html, "CSVファイルを選択");
 }
 
 /**
@@ -163,15 +169,15 @@ function importCsv(formObject) {
     const formatName = formObject.formatName;
 
     if (!fileBlob) {
-      throw new Error('ファイルが選択されていません。');
+      throw new Error("ファイルが選択されていません。");
     }
     if (!formatName) {
-      throw new Error('CSVフォーマットが選択されていません。');
+      throw new Error("CSVフォーマットが選択されていません。");
     }
 
     // 対応するフォーマット定義を検索
     const formats = getCsvFormats();
-    const selectedFormat = formats.find(f => f[0] === formatName);
+    const selectedFormat = formats.find((f) => f[0] === formatName);
 
     if (!selectedFormat) {
       throw new Error(`定義されていないCSVフォーマットです: ${formatName}`);
@@ -179,7 +185,7 @@ function importCsv(formObject) {
 
     // 古い7列の定義を補完する
     if (selectedFormat.length === 7) {
-      selectedFormat.splice(5, 0, ''); // 5番目の位置（BalanceColumn）に空文字を挿入
+      selectedFormat.splice(5, 0, ""); // 5番目の位置（BalanceColumn）に空文字を挿入
     }
 
     const encoding = selectedFormat[7];
@@ -188,7 +194,9 @@ function importCsv(formObject) {
     // 1. CSVを解析
     const parsedData = parseCsv(csvData, selectedFormat);
     if (parsedData.length === 0) {
-      SpreadsheetApp.getUi().alert('CSVから有効なデータを読み取れませんでした。');
+      SpreadsheetApp.getUi().alert(
+        "CSVから有効なデータを読み取れませんでした。"
+      );
       return;
     }
 
@@ -198,11 +206,12 @@ function importCsv(formObject) {
     // 3. スプレッドシートに追記
     appendTransactions(categorizedData);
 
-    SpreadsheetApp.getUi().alert(`${categorizedData.length}件のデータをインポートしました。`);
-
+    SpreadsheetApp.getUi().alert(
+      `${categorizedData.length}件のデータをインポートしました。`
+    );
   } catch (e) {
     // エラーをクライアントに投げる
-    throw new Error('インポート処理中にエラーが発生しました: ' + e.message);
+    throw new Error("インポート処理中にエラーが発生しました: " + e.message);
   }
 }
 
@@ -211,17 +220,25 @@ function importCsv(formObject) {
  */
 function showGenerateReportDialog() {
   const ui = SpreadsheetApp.getUi();
-  const yearResult = ui.prompt('レポート生成', '対象の年を入力してください（例: 2025）', ui.ButtonSet.OK_CANCEL);
+  const yearResult = ui.prompt(
+    "レポート生成",
+    "対象の年を入力してください（例: 2025）",
+    ui.ButtonSet.OK_CANCEL
+  );
 
   if (yearResult.getSelectedButton() !== ui.Button.OK) return;
   const year = parseInt(yearResult.getResponseText(), 10);
 
-  const monthResult = ui.prompt('レポート生成', '対象の月を入力してください（1-12）', ui.ButtonSet.OK_CANCEL);
+  const monthResult = ui.prompt(
+    "レポート生成",
+    "対象の月を入力してください（1-12）",
+    ui.ButtonSet.OK_CANCEL
+  );
   if (monthResult.getSelectedButton() !== ui.Button.OK) return;
   const month = parseInt(monthResult.getResponseText(), 10);
 
   if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
-    ui.alert('無効な年月です。処理を中断します。');
+    ui.alert("無効な年月です。処理を中断します。");
     return;
   }
 
@@ -230,8 +247,8 @@ function showGenerateReportDialog() {
 
 /**
  * 指定された年月の各種レポートを生成する
- * @param {number} year 
- * @param {number} month 
+ * @param {number} year
+ * @param {number} month
  */
 function generateReports(year, month) {
   generateMonthlySummaryReport(year, month);
@@ -243,16 +260,24 @@ function generateReports(year, month) {
  */
 function showSplitwiseDialog() {
   const ui = SpreadsheetApp.getUi();
-  const yearResult = ui.prompt('割り勘計算', '対象の年を入力してください（例: 2025）', ui.ButtonSet.OK_CANCEL);
+  const yearResult = ui.prompt(
+    "割り勘計算",
+    "対象の年を入力してください（例: 2025）",
+    ui.ButtonSet.OK_CANCEL
+  );
   if (yearResult.getSelectedButton() !== ui.Button.OK) return;
   const year = parseInt(yearResult.getResponseText(), 10);
 
-  const monthResult = ui.prompt('割り勘計算', '対象の月を入力してください（1-12）', ui.ButtonSet.OK_CANCEL);
+  const monthResult = ui.prompt(
+    "割り勘計算",
+    "対象の月を入力してください（1-12）",
+    ui.ButtonSet.OK_CANCEL
+  );
   if (monthResult.getSelectedButton() !== ui.Button.OK) return;
   const month = parseInt(monthResult.getResponseText(), 10);
 
   if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
-    ui.alert('無効な年月です。処理を中断します。');
+    ui.alert("無効な年月です。処理を中断します。");
     return;
   }
 
@@ -260,40 +285,58 @@ function showSplitwiseDialog() {
   const splitTotal = result.splitTotal;
   const fullTotal = result.fullTotal;
   const transactions = result.transactions;
-  const finalAmount = (splitTotal / 2) + fullTotal;
+  const finalAmount = splitTotal / 2 + fullTotal;
 
   // Report_Splitwiseシートに出力
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Report_Splitwise');
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(
+    SHEET_NAMES.REPORT_SPLITWISE
+  );
   sheet.clear();
-  sheet.getRange('A1').setValue(`${year}年${month}月 割り勘・立替 計算結果`);
+  sheet.getRange("A1").setValue(`${year}年${month}月 割り勘・立替 計算結果`);
 
   // サマリー情報を出力
   const summaryData = [
-    ['割り勘対象 (50%)', splitTotal],
-    ['全額請求対象 (100%)', fullTotal],
-    ['請求額 (割り勘/2 + 全額)', finalAmount]
+    ["割り勘対象 (50%)", splitTotal],
+    ["全額請求対象 (100%)", fullTotal],
+    ["請求額 (割り勘/2 + 全額)", finalAmount],
   ];
-  sheet.getRange(3, 1, 3, 2).setValues(summaryData).setFontWeight('bold');
+  sheet.getRange(3, 1, 3, 2).setValues(summaryData).setFontWeight("bold");
 
   if (transactions.length > 0) {
-    const headers = ['日付', '内容', '金額', '種別', '金融機関', 'カテゴリ', 'メモ', '残高', '計算タイプ'];
+    const headers = [
+      "日付",
+      "内容",
+      "金額",
+      "種別",
+      "金融機関",
+      "カテゴリ",
+      "メモ",
+      "残高",
+      "計算タイプ",
+    ];
     sheet.getRange(7, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(8, 1, transactions.length, transactions[0].length).setValues(transactions);
+    sheet
+      .getRange(8, 1, transactions.length, transactions[0].length)
+      .setValues(transactions);
   }
 
-  const message = `${year}年${month}月の計算結果:\n` +
-                  `--------------------\n` +
-                  `割り勘対象 (50%): ${splitTotal} 円\n` +
-                  `全額請求対象 (100%): ${fullTotal} 円\n` +
-                  `--------------------\n` +
-                  `請求額 (割り勘/2 + 全額): ${finalAmount} 円\n\n` +
-                  `詳細は「Report_Splitwise」シートに出力しました。`;
+  const message =
+    `${year}年${month}月の計算結果:\n` +
+    `--------------------
+` +
+    `割り勘対象 (50%): ${splitTotal} 円
+` +
+    `全額請求対象 (100%): ${fullTotal} 円
+` +
+    `--------------------
+` +
+    `請求額 (割り勘/2 + 全額): ${finalAmount} 円
+
+` +
+    `詳細は「割り勘計算レポート」シートに出力しました。`;
 
   ui.alert(message);
 }
-
-
-
 
 /**
  * アプリケーションの初期設定を行います。
@@ -304,134 +347,187 @@ function initializeSheets() {
   let sheet;
 
   // DB_Transactionsシートの作成とヘッダー設定
-  const transactionsSheetName = 'DB_Transactions';
-  sheet = spreadsheet.getSheetByName(transactionsSheetName);
+  sheet = spreadsheet.getSheetByName(SHEET_NAMES.DB_TRANSACTIONS);
   if (!sheet) {
-    sheet = spreadsheet.insertSheet(transactionsSheetName);
-    const headers = ['日付', '内容', '金額', '種別', '金融機関', 'カテゴリ', 'メモ', '残高'];
+    sheet = spreadsheet.insertSheet(SHEET_NAMES.DB_TRANSACTIONS);
+    const headers = [
+      "日付",
+      "内容",
+      "金額",
+      "種別",
+      "金融機関",
+      "カテゴリ",
+      "メモ",
+      "残高",
+    ];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    SpreadsheetApp.getUi().alert(`「${transactionsSheetName}」シートを作成しました。`);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.DB_TRANSACTIONS}」シートを作成しました。`
+    );
   } else {
-    SpreadsheetApp.getUi().alert(`「${transactionsSheetName}」シートは既に存在します。`);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.DB_TRANSACTIONS}」シートは既に存在します。`
+    );
   }
-  
+
   // Settingsシートの作成とヘッダー設定
-  const settingsSheetName = 'Settings';
-  sheet = spreadsheet.getSheetByName(settingsSheetName);
+  sheet = spreadsheet.getSheetByName(SHEET_NAMES.SETTINGS);
   if (!sheet) {
-    sheet = spreadsheet.insertSheet(settingsSheetName);
-    const headers = ['キーワード', 'カテゴリ'];
+    sheet = spreadsheet.insertSheet(SHEET_NAMES.SETTINGS);
+    const headers = ["キーワード", "カテゴリ"];
     const rules = [
-      ['楽天', '固定費'],
-      ['Amazon', '変動費'],
+      ["楽天", "固定費"],
+      ["Amazon", "変動費"],
     ];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.getRange(2, 1, rules.length, rules[0].length).setValues(rules);
 
     // 収支計算から除外するカテゴリのセクションを追加
-    const excludeHeader = ['収支から除外するカテゴリ'];
-    const excludeCategories = [['投資']];
+    const excludeHeader = ["収支から除外するカテゴリ"];
+    const excludeCategories = [["投資"]];
     sheet.getRange(1, 5, 1, 1).setValue(excludeHeader);
-    sheet.getRange(2, 5, excludeCategories.length, 1).setValues(excludeCategories);
+    sheet
+      .getRange(2, 5, excludeCategories.length, 1)
+      .setValues(excludeCategories);
 
-    SpreadsheetApp.getUi().alert(`「${settingsSheetName}」シートを作成し、サンプルルールを定義しました。`);
-
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.SETTINGS}」シートを作成し、サンプルルールを定義しました。`
+    );
   } else {
-    SpreadsheetApp.getUi().alert(`「${settingsSheetName}」シートは既に存在します。`);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.SETTINGS}」シートは既に存在します。`
+    );
   }
 
   // Settings_Splitwiseシートの作成
-  const splitwiseSettingsSheetName = 'Settings_Splitwise';
-  sheet = spreadsheet.getSheetByName(splitwiseSettingsSheetName);
+  sheet = spreadsheet.getSheetByName(SHEET_NAMES.SETTINGS_SPLITWISE);
   if (!sheet) {
-    sheet = spreadsheet.insertSheet(splitwiseSettingsSheetName);
-    const headers = ['割り勘キーワード (50%)', '全額請求キーワード (100%)'];
+    sheet = spreadsheet.insertSheet(SHEET_NAMES.SETTINGS_SPLITWISE);
+    const headers = ["割り勘キーワード (50%)", "全額請求キーワード (100%)"];
     const sampleKeywords = [
-      ['割り勘', '立替'],
-      ['ワリカン', '']
+      ["割り勘", "立替"],
+      ["ワリカン", ""],
     ];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(2, 1, sampleKeywords.length, sampleKeywords[0].length).setValues(sampleKeywords);
-    SpreadsheetApp.getUi().alert(`「${splitwiseSettingsSheetName}」シートを作成し、サンプルキーワードを定義しました。`);
+    sheet
+      .getRange(2, 1, sampleKeywords.length, sampleKeywords[0].length)
+      .setValues(sampleKeywords);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.SETTINGS_SPLITWISE}」シートを作成し、サンプルキーワードを定義しました。`
+    );
   } else {
-    SpreadsheetApp.getUi().alert(`「${splitwiseSettingsSheetName}」シートは既に存在します。`);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.SETTINGS_SPLITWISE}」シートは既に存在します。`
+    );
   }
 
   // DB_Securitiesシートの作成
-  const securitiesSheetName = 'DB_Securities';
-  sheet = spreadsheet.getSheetByName(securitiesSheetName);
+  sheet = spreadsheet.getSheetByName(SHEET_NAMES.DB_SECURITIES);
   if (!sheet) {
-    sheet = spreadsheet.insertSheet(securitiesSheetName);
-    const headers = ['日付', '証券会社名', '評価額'];
-    const sampleData = [[new Date('2025-01-01'), 'SBI証券', 1000000]];
+    sheet = spreadsheet.insertSheet(SHEET_NAMES.DB_SECURITIES);
+    const headers = ["日付", "証券会社名", "評価額"];
+    const sampleData = [[new Date("2025-01-01"), "SBI証券", 1000000]];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-    sheet.getRange(2, 1, sampleData.length, sampleData[0].length).setValues(sampleData);
-    SpreadsheetApp.getUi().alert(`「${securitiesSheetName}」シートを作成し、サンプルデータを定義しました。`);
+    sheet
+      .getRange(2, 1, sampleData.length, sampleData[0].length)
+      .setValues(sampleData);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.DB_SECURITIES}」シートを作成し、サンプルデータを定義しました。`
+    );
   } else {
-    SpreadsheetApp.getUi().alert(`「${securitiesSheetName}」シートは既に存在します。`);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.DB_SECURITIES}」シートは既に存在します。`
+    );
   }
 
   // Report_Portfolioシートの作成
-  const portfolioSheetName = 'Report_Portfolio';
-  sheet = spreadsheet.getSheetByName(portfolioSheetName);
+  sheet = spreadsheet.getSheetByName(SHEET_NAMES.REPORT_PORTFOLIO);
   if (!sheet) {
-    sheet = spreadsheet.insertSheet(portfolioSheetName);
-    SpreadsheetApp.getUi().alert(`「${portfolioSheetName}」シートを作成しました。`);
+    sheet = spreadsheet.insertSheet(SHEET_NAMES.REPORT_PORTFOLIO);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.REPORT_PORTFOLIO}」シートを作成しました。`
+    );
   } else {
-    SpreadsheetApp.getUi().alert(`「${portfolioSheetName}」シートは既に存在します。`);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.REPORT_PORTFOLIO}」シートは既に存在します。`
+    );
   }
 
   // Settings_CsvFormatsシートの作成とヘッダー設定
-  const formatsSheetName = 'Settings_CsvFormats';
-  sheet = spreadsheet.getSheetByName(formatsSheetName);
+  sheet = spreadsheet.getSheetByName(SHEET_NAMES.SETTINGS_CSV_FORMATS);
   if (!sheet) {
-    sheet = spreadsheet.insertSheet(formatsSheetName);
-    const headers = ['FormatName', 'DateColumn', 'DescriptionColumn', 'ExpenseColumn', 'IncomeColumn', 'BalanceColumn', 'HeaderRows', 'Encoding'];
-    const initialFormat = ['三井住友カード', 1, 2, 3, '', '', 1, 'Shift_JIS']; // 残高列は空
+    sheet = spreadsheet.insertSheet(SHEET_NAMES.SETTINGS_CSV_FORMATS);
+    const headers = [
+      "FormatName",
+      "DateColumn",
+      "DescriptionColumn",
+      "ExpenseColumn",
+      "IncomeColumn",
+      "BalanceColumn",
+      "HeaderRows",
+      "Encoding",
+    ];
+    const initialFormat = ["三井住友カード", 1, 2, 3, "", "", 1, "Shift_JIS"]; // 残高列は空
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.getRange(2, 1, 1, initialFormat.length).setValues([initialFormat]);
-    SpreadsheetApp.getUi().alert(`「${formatsSheetName}」シートを作成し、サンプルフォーマットを定義しました。`);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.SETTINGS_CSV_FORMATS}」シートを作成し、サンプルフォーマットを定義しました。`
+    );
   } else {
-    SpreadsheetApp.getUi().alert(`「${formatsSheetName}」シートは既に存在します。`);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.SETTINGS_CSV_FORMATS}」シートは既に存在します。`
+    );
   }
 
   // Report_MonthlySummaryシートの作成
-  const monthlySummarySheetName = 'Report_MonthlySummary';
-  sheet = spreadsheet.getSheetByName(monthlySummarySheetName);
+  sheet = spreadsheet.getSheetByName(SHEET_NAMES.REPORT_MONTHLY_SUMMARY);
   if (!sheet) {
-    sheet = spreadsheet.insertSheet(monthlySummarySheetName);
-    SpreadsheetApp.getUi().alert(`「${monthlySummarySheetName}」シートを作成しました。`);
+    sheet = spreadsheet.insertSheet(SHEET_NAMES.REPORT_MONTHLY_SUMMARY);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.REPORT_MONTHLY_SUMMARY}」シートを作成しました。`
+    );
   } else {
-    SpreadsheetApp.getUi().alert(`「${monthlySummarySheetName}」シートは既に存在します。`);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.REPORT_MONTHLY_SUMMARY}」シートは既に存在します。`
+    );
   }
 
   // Report_TransactionListシートの作成
-  const transactionListSheetName = 'Report_TransactionList';
-  sheet = spreadsheet.getSheetByName(transactionListSheetName);
+  sheet = spreadsheet.getSheetByName(SHEET_NAMES.REPORT_TRANSACTION_LIST);
   if (!sheet) {
-    sheet = spreadsheet.insertSheet(transactionListSheetName);
-    SpreadsheetApp.getUi().alert(`「${transactionListSheetName}」シートを作成しました。`);
+    sheet = spreadsheet.insertSheet(SHEET_NAMES.REPORT_TRANSACTION_LIST);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.REPORT_TRANSACTION_LIST}」シートを作成しました。`
+    );
   } else {
-    SpreadsheetApp.getUi().alert(`「${transactionListSheetName}」シートは既に存在します。`);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.REPORT_TRANSACTION_LIST}」シートは既に存在します。`
+    );
   }
 
   // Report_AssetTransitionシートの作成
-  const assetTransitionSheetName = 'Report_AssetTransition';
-  sheet = spreadsheet.getSheetByName(assetTransitionSheetName);
+  sheet = spreadsheet.getSheetByName(SHEET_NAMES.REPORT_ASSET_TRANSITION);
   if (!sheet) {
-    sheet = spreadsheet.insertSheet(assetTransitionSheetName);
-    SpreadsheetApp.getUi().alert(`「${assetTransitionSheetName}」シートを作成しました。`);
+    sheet = spreadsheet.insertSheet(SHEET_NAMES.REPORT_ASSET_TRANSITION);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.REPORT_ASSET_TRANSITION}」シートを作成しました。`
+    );
   } else {
-    SpreadsheetApp.getUi().alert(`「${assetTransitionSheetName}」シートは既に存在します。`);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.REPORT_ASSET_TRANSITION}」シートは既に存在します。`
+    );
   }
 
   // Report_Splitwiseシートの作成
-  const splitwiseSheetName = 'Report_Splitwise';
-  sheet = spreadsheet.getSheetByName(splitwiseSheetName);
+  sheet = spreadsheet.getSheetByName(SHEET_NAMES.REPORT_SPLITWISE);
   if (!sheet) {
-    sheet = spreadsheet.insertSheet(splitwiseSheetName);
-    SpreadsheetApp.getUi().alert(`「${splitwiseSheetName}」シートを作成しました。`);
+    sheet = spreadsheet.insertSheet(SHEET_NAMES.REPORT_SPLITWISE);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.REPORT_SPLITWISE}」シートを作成しました。`
+    );
   } else {
-    SpreadsheetApp.getUi().alert(`「${splitwiseSheetName}」シートは既に存在します。`);
+    SpreadsheetApp.getUi().alert(
+      `「${SHEET_NAMES.REPORT_SPLITWISE}」シートは既に存在します。`
+    );
   }
 }
