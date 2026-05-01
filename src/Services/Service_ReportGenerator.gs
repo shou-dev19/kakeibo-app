@@ -287,6 +287,7 @@ function generateAnnualSummaryReport() {
 
     let monthlyIncome = 0;
     let monthlyExpense = 0;
+    let monthlyInvestment = 0;
 
     transactions.forEach(tx => {
       const amount = tx[2];
@@ -302,31 +303,39 @@ function generateAnnualSummaryReport() {
         }
       }
 
+      // 投資額を別途集計（収支除外カテゴリに含まれているため上記ブロックでは加算されない）
+      if (type === '支出' && category === '投資') {
+        monthlyInvestment += amount;
+      }
+
       // 年間レポート用のカテゴリ別集計（「振替」と「年間レポート除外カテゴリ」を除く）
       if (type === '支出' && category !== '振替' && !excludeFromAnnualReportCategories.includes(category)) {
         monthlyCategoryExpenses[monthKey][category] = (monthlyCategoryExpenses[monthKey][category] || 0) + amount;
         allCategories.add(category);
       }
     });
-    monthlySummaries.unshift([monthKey, monthlyIncome, monthlyExpense, monthlyIncome - monthlyExpense]);
+
+    const surplus = monthlyIncome - monthlyExpense;
+    monthlySummaries.unshift([monthKey, monthlyIncome, monthlyExpense, surplus, monthlyInvestment, surplus - monthlyInvestment]);
   }
 
   // 月次サマリーをシートに出力
-  const monthlyHeaders = ['年月', '収入', '支出', '収支'];
+  const monthlyHeaders = ['年月', '収入', '支出', '余剰資金', '投資額', '投資後残高'];
   sheet.getRange(3, 1, 1, monthlyHeaders.length).setValues([monthlyHeaders]).setFontWeight('bold');
   sheet.getRange(4, 1, monthlySummaries.length, monthlyHeaders.length).setValues(monthlySummaries);
 
   // 合計行を追加
   const totalIncome = monthlySummaries.reduce((sum, row) => sum + row[1], 0);
   const totalExpense = monthlySummaries.reduce((sum, row) => sum + row[2], 0);
-  const totalBalance = totalIncome - totalExpense;
-  const totalRow = ['合計', totalIncome, totalExpense, totalBalance];
+  const totalSurplus = monthlySummaries.reduce((sum, row) => sum + row[3], 0);
+  const totalInvestment = monthlySummaries.reduce((sum, row) => sum + row[4], 0);
+  const totalRow = ['合計', totalIncome, totalExpense, totalSurplus, totalInvestment, totalSurplus - totalInvestment];
   sheet.getRange(4 + monthlySummaries.length, 1, 1, totalRow.length).setValues([totalRow]).setFontWeight('bold');
 
   // 3. 月別カテゴリ支出テーブルを作成
   const sortedCategories = Array.from(allCategories).sort();
   const categoryTableStartRow = 4;
-  const categoryTableStartCol = 6; // F列
+  const categoryTableStartCol = 8; // H列（月次サマリーがA〜F列を使用するため）
 
   const categoryHeaders = ['カテゴリ', ...monthlySummaries.map(s => s[0]), '平均', '合計'];
   const categoryTable = sortedCategories.map(category => {
