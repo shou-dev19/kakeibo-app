@@ -19,8 +19,11 @@ function categorizeTransactions(transactions) {
     const description = transaction[1];
     let category = '未分類'; // デフォルトカテゴリ
 
-    // ルールが存在する場合のみ、カテゴリのマッチングを行う
-    if (rules.length > 0) {
+    // イオンカードの「十日市場」は食料品に固定
+    if (transaction[4] === 'イオンカード' && description.includes('十日市場')) {
+      category = '食料品';
+    } else if (rules.length > 0) {
+      // ルールが存在する場合のみ、カテゴリのマッチングを行う
       for (const rule of rules) {
         const keyword = rule[0];
         const assignedCategory = rule[1];
@@ -72,12 +75,17 @@ function reCategorizeAllTransactions() {
     const description = transaction[1];
     let category = '未分類';
 
-    for (const rule of rules) {
-      const keyword = rule[0];
-      const assignedCategory = rule[1];
-      if (description.includes(keyword)) {
-        category = assignedCategory;
-        break;
+    // イオンカードの「十日市場」は食料品に固定
+    if (transaction[4] === 'イオンカード' && description.includes('十日市場')) {
+      category = '食料品';
+    } else {
+      for (const rule of rules) {
+        const keyword = rule[0];
+        const assignedCategory = rule[1];
+        if (description.includes(keyword)) {
+          category = assignedCategory;
+          break;
+        }
       }
     }
     transaction[5] = category; // カテゴリ列（6番目、index 5）を更新
