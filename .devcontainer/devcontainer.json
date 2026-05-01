@@ -1,17 +1,32 @@
 {
-  "name": "Devcontainer for Claude Code and Gemini CLI",
-  "build": {
-    "dockerfile": "Dockerfile",
-    "args": {
-      "TZ": "${localEnv:TZ:America/Los_Angeles}",
-      "CLAUDE_CODE_VERSION": "latest",
-      "GIT_DELTA_VERSION": "0.18.2",
-      "ZSH_IN_DOCKER_VERSION": "1.2.0"
-    }
+  "name": "Claude & Gemini & TypeScript Dev",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-20-bookworm",
+  "features": {
+      "ghcr.io/devcontainers/features/git:1": {},
+      "ghcr.io/devcontainers/features/github-cli:1": {},
+      "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
   },
+  "mounts": [
+      {
+          "source": "claude-config",
+          "target": "/home/node/.claude",
+          "type": "volume"
+      },
+      {
+          "source": "gemini-config",
+          "target": "/home/node/.gemini",
+          "type": "volume"
+      },
+      {
+          "source": "gh-config",
+          "target": "/home/node/.config/gh",
+          "type": "volume"
+      }
+  ],
+  // Docker起動時に .env ファイルを読み込ませる設定
   "runArgs": [
-    "--cap-add=NET_ADMIN",
-    "--cap-add=NET_RAW"
+      "--env-file",
+      ".env"
   ],
   "customizations": {
     "vscode": {
@@ -43,17 +58,9 @@
       }
     }
   },
+  // コンテナユーザーをnode(非root)に設定
   "remoteUser": "node",
-  "mounts": [
-    "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
-    "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume",
-    "source=gemini-config,target=/home/node/.gemini,type=volume"
-  ],
-  "containerEnv": {
-    "NODE_OPTIONS": "--max-old-space-size=4096",
-    "CLAUDE_CONFIG_DIR": "/home/node/.claude",
-    "POWERLEVEL9K_DISABLE_GITSTATUS": "true"
-  },
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
-  "workspaceFolder": "/workspace"
+  // コンテナ作成後に実行されるコマンド
+  // ここでGemini CLIをグローバルインストールします
+  "postCreateCommand": "bash .devcontainer/setup.sh"
 }
