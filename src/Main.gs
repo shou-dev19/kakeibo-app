@@ -9,8 +9,9 @@ function onOpen() {
     .addSeparator()
     .addItem("CSVファイルを手動インポート", "showCsvImportDialog")
     .addSeparator()
-    .addItem("月次レポートを生成", "showGenerateReportDialog")
-    .addItem("資産推移グラフを生成", "generateAssetTransitionGraph")
+      .addItem('月次レポートを生成', 'showGenerateReportDialog')
+      .addItem('年間レポートを生成', 'generateAnnualSummaryReport')
+      .addItem('資産推移グラフを生成', 'generateAssetTransitionGraph')
     .addItem("保有資産レポート", "generatePortfolioReport")
     .addSeparator()
     .addItem("割り勘計算", "showSplitwiseDialog")
@@ -383,16 +384,18 @@ function initializeSheets() {
     sheet.getRange(2, 1, rules.length, rules[0].length).setValues(rules);
 
     // 収支計算から除外するカテゴリのセクションを追加
-    const excludeHeader = ["収支から除外するカテゴリ"];
-    const excludeCategories = [["投資"]];
+    const excludeHeader = ['収支から除外するカテゴリ'];
+    const excludeCategories = [['投資']];
     sheet.getRange(1, 5, 1, 1).setValue(excludeHeader);
-    sheet
-      .getRange(2, 5, excludeCategories.length, 1)
-      .setValues(excludeCategories);
+    sheet.getRange(2, 5, excludeCategories.length, 1).setValues(excludeCategories);
 
-    SpreadsheetApp.getUi().alert(
-      `「${SHEET_NAMES.SETTINGS}」シートを作成し、サンプルルールを定義しました。`
-    );
+    // 年間レポートから除外するカテゴリのセクションを追加
+    const annualExcludeHeader = ['年間レポートから除外するカテゴリ'];
+    const annualExcludeCategories = [['振替']];
+    sheet.getRange(1, 6, 1, 1).setValue(annualExcludeHeader);
+    sheet.getRange(2, 6, annualExcludeCategories.length, 1).setValues(annualExcludeCategories);
+
+    SpreadsheetApp.getUi().alert(`「${SHEET_NAMES.SETTINGS}」シートを作成し、サンプルルールを定義しました。`);
   } else {
     SpreadsheetApp.getUi().alert(
       `「${SHEET_NAMES.SETTINGS}」シートは既に存在します。`
@@ -519,15 +522,20 @@ function initializeSheets() {
   }
 
   // Report_Splitwiseシートの作成
-  sheet = spreadsheet.getSheetByName(SHEET_NAMES.REPORT_SPLITWISE);
-  if (!sheet) {
-    sheet = spreadsheet.insertSheet(SHEET_NAMES.REPORT_SPLITWISE);
-    SpreadsheetApp.getUi().alert(
-      `「${SHEET_NAMES.REPORT_SPLITWISE}」シートを作成しました。`
-    );
-  } else {
-    SpreadsheetApp.getUi().alert(
-      `「${SHEET_NAMES.REPORT_SPLITWISE}」シートは既に存在します。`
-    );
+    sheet = spreadsheet.getSheetByName(SHEET_NAMES.REPORT_SPLITWISE);
+    if (!sheet) {
+      sheet = spreadsheet.insertSheet(SHEET_NAMES.REPORT_SPLITWISE);
+      SpreadsheetApp.getUi().alert(`「${SHEET_NAMES.REPORT_SPLITWISE}」シートを作成しました。`);
+    } else {
+      SpreadsheetApp.getUi().alert(`「${SHEET_NAMES.REPORT_SPLITWISE}」シートは既に存在します。`);
+    }
+  
+    // 年間レポートシートの作成
+    sheet = spreadsheet.getSheetByName(SHEET_NAMES.REPORT_ANNUAL_SUMMARY);
+    if (!sheet) {
+      sheet = spreadsheet.insertSheet(SHEET_NAMES.REPORT_ANNUAL_SUMMARY);
+      SpreadsheetApp.getUi().alert(`「${SHEET_NAMES.REPORT_ANNUAL_SUMMARY}」シートを作成しました。`);
+    } else {
+      SpreadsheetApp.getUi().alert(`「${SHEET_NAMES.REPORT_ANNUAL_SUMMARY}」シートは既に存在します。`);
+    }
   }
-}

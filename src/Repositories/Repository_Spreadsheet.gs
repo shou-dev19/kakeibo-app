@@ -12,7 +12,8 @@ const SHEET_NAMES = {
   REPORT_TRANSACTION_LIST: '月次明細一覧',
   REPORT_ASSET_TRANSITION: '総資産推移グラフ',
   REPORT_SPLITWISE: '割り勘計算レポート',
-  REPORT_PORTFOLIO: '資産ポートフォリオ'
+  REPORT_PORTFOLIO: '資産ポートフォリオ',
+  REPORT_ANNUAL_SUMMARY: '年間レポート'
 };
 
 /**
@@ -137,6 +138,32 @@ function getExcludeFromBalanceCategories() {
     return categories;
   } catch (e) {
     console.error('除外カテゴリの取得に失敗しました。', e);
+    throw e;
+  }
+}
+
+/**
+ * Settingsシートから「年間レポートから除外するカテゴリ」を取得する
+ * @returns {Array<string>} 除外カテゴリ名の配列
+ */
+function getExcludeFromAnnualReportCategories() {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.SETTINGS);
+    if (!sheet) {
+      throw new Error(`シート「${SHEET_NAMES.SETTINGS}」が見つかりません。`);
+    }
+    // F列の2行目から最後まで読み込む
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      return [];
+    }
+    const categories = sheet.getRange(2, 6, lastRow - 1, 1).getValues()
+      .flat()
+      .filter(Boolean);
+    console.log(`${categories.length}件の年間レポート除外カテゴリを取得しました。`);
+    return categories;
+  } catch (e) {
+    console.error('年間レポート除外カテゴリの取得に失敗しました。', e);
     throw e;
   }
 }

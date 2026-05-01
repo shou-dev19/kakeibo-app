@@ -257,5 +257,112 @@ function generatePortfolioReport() {
     .build();
 
   reportSheet.insertChart(chart);
-  SpreadsheetApp.getUi().alert('保有資産レポートを生成しました。');
+  }
+
+/**
+ * 直近1年間の年間サマリーレポートを生成する
+ */
+function generateAnnualSummaryReport() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_NAMES.REPORT_ANNUAL_SUMMARY);
+  sheet.clear();
+  sheet.getRange('A1').setValue('年間サマリーレポート');
+
+  const today = new Date();
+  const monthlySummaries = [];
+  const monthlyCategoryExpenses = {}; // { '2025/09': { '食費': 50000, ... }, ... }
+  const allCategories = new Set();
+
+  const excludeFromBalanceCategories = getExcludeFromBalanceCategories();
+  const excludeFromAnnualReportCategories = getExcludeFromAnnualReportCategories();
+
+  // 1. 直近12ヶ月分のデータを月ごとに処理し、中間データを構築
+  for (let i = 0; i < 12; i++) {
+    const targetDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const year = targetDate.getFullYear();
+    const month = targetDate.getMonth() + 1;
+    const monthKey = `${year}/${('0' + month).slice(-2)}`;
+
+    const transactions = getTransactionsForMonth(year, month);
+    monthlyCategoryExpenses[monthKey] = {};
+
+    let monthlyIncome = 0;
+    let monthlyExpense = 0;
+
+    transactions.forEach(tx => {
+      const amount = tx[2];
+      const type = tx[3];
+      const category = tx[5] || '未分類';
+
+      // 月次収支の計算（「振替」と「収支除外カテゴリ」を除く）
+      if (category !== '振替' && !excludeFromBalanceCategories.includes(category)) {
+        if (type === '収入') {
+          monthlyIncome += amount;
+        } else {
+          monthlyExpense += amount;
+        }
+      }
+
+      // 年間レポート用のカテゴリ別集計（「振替」と「年間レポート除外カテゴリ」を除く）
+      if (type === '支出' && category !== '振替' && !excludeFromAnnualReportCategories.includes(category)) {
+        monthlyCategoryExpenses[monthKey][category] = (monthlyCategoryExpenses[monthKey][category] || 0) + amount;
+        allCategories.add(category);
+      }
+    });
+    monthlySummaries.unshift([monthKey, monthlyIncome, monthlyExpense, monthlyIncome - monthlyExpense]);
+  }
+
+  // 月次サマリーをシートに出力
+  const monthlyHeaders = ['年月', '収入', '支出', '収支'];
+  sheet.getRange(3, 1, 1, monthlyHeaders.length).setValues([monthlyHeaders]).setFontWeight('bold');
+  sheet.getRange(4, 1, monthlySummaries.length, monthlyHeaders.length).setValues(monthlySummaries);
+
+  // 合計行を追加
+  const totalIncome = monthlySummaries.reduce((sum, row) => sum + row[1], 0);
+  const totalExpense = monthlySummaries.reduce((sum, row) => sum + row[2], 0);
+  const totalBalance = totalIncome - totalExpense;
+  const totalRow = ['合計', totalIncome, totalExpense, totalBalance];
+  sheet.getRange(4 + monthlySummaries.length, 1, 1, totalRow.length).setValues([totalRow]).setFontWeight('bold');
+
+  // 3. 月別カテゴリ支出テーブルを作成
+  const sortedCategories = Array.from(allCategories).sort();
+  const categoryTableStartRow = 4;
+  const categoryTableStartCol = 6; // F列
+
+  const categoryHeaders = ['カテゴリ', ...monthlySummaries.map(s => s[0]), '平均', '合計'];
+  const categoryTable = sortedCategories.map(category => {
+    const monthlyValues = monthlySummaries.map(s => monthlyCategoryExpenses[s[0]][category] || 0);
+    const total = monthlyValues.reduce((sum, v) => sum + v, 0);
+    const average = total / 12;
+    return [category, ...monthlyValues, average, total];
+  });
+
+  sheet.getRange(categoryTableStartRow, categoryTableStartCol, 1, categoryHeaders.length).setValues([categoryHeaders]).setFontWeight('bold');
+  sheet.getRange(categoryTableStartRow + 1, categoryTableStartCol, categoryTable.length, categoryHeaders.length).setValues(categoryTable);
+
+  // 4. 平均支出割合の円グラフを作成
+  const pieChartData = sortedCategories.map(category => {
+    const monthlyValues = monthlySummaries.map(s => monthlyCategoryExpenses[s[0]][category] || 0);
+    const total = monthlyValues.reduce((sum, v) => sum + v, 0);
+    return [category, total / 12]; // 平均値でグラフ作成
+  }).filter(row => row[1] > 0);
+
+  // 平均支出額で降順ソート
+  pieChartData.sort((a, b) => b[1] - a[1]);
+
+  const pieChartStartRow = categoryTableStartRow + categoryTable.length + 2;
+  sheet.getRange(pieChartStartRow, categoryTableStartCol, 1, 2).setValues([['カテゴリ', '月平均支出']]).setFontWeight('bold');
+  sheet.getRange(pieChartStartRow + 1, categoryTableStartCol, pieChartData.length, 2).setValues(pieChartData);
+
+  sheet.getCharts().forEach(chart => sheet.removeChart(chart));
+  const chartRange = sheet.getRange(pieChartStartRow, categoryTableStartCol, pieChartData.length + 1, 2);
+  const pieChart = sheet.newChart()
+    .setChartType(Charts.ChartType.PIE)
+    .addRange(chartRange)
+    .setPosition(pieChartStartRow, categoryTableStartCol + 3, 0, 0) // I列あたり
+    .setOption('title', '月平均の支出カテゴリ割合')
+    .build();
+
+  sheet.insertChart(pieChart);
+
+  SpreadsheetApp.getUi().alert('年間レポートを生成しました。');
 }
