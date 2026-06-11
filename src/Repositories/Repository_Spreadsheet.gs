@@ -89,8 +89,13 @@ function getCsvFormats() {
 }
 
 /**
- * Settings_Splitwiseシートからキーワードを取得する
- * @returns {{split: Array<string>, full: Array<string>}} 割り勘と全額請求のキーワードオブジェクト
+ * Settings_Splitwiseシートから設定を取得する
+ * @returns {{
+ *   split: Array<string>,
+ *   full: Array<string>,
+ *   splitInstitutions: Array<string>,
+ *   fullInstitutions: Array<string>
+ * }} 割り勘と全額請求のキーワードおよび金融機関オブジェクト
  */
 function getSplitwiseKeywords() {
   try {
@@ -100,14 +105,33 @@ function getSplitwiseKeywords() {
     }
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) {
-      return { split: [], full: [] };
+      return { split: [], full: [], splitInstitutions: [], fullInstitutions: [] };
     }
-    const data = sheet.getRange(2, 1, lastRow - 1, 2).getValues();
-    const splitKeywords = data.map(row => row[0]).filter(Boolean);
-    const fullKeywords = data.map(row => row[1]).filter(Boolean);
+    const maxColumns = sheet.getLastColumn();
+    let splitKeywords = [];
+    let fullKeywords = [];
+    let splitInstitutions = [];
+    let fullInstitutions = [];
+
+    if (maxColumns >= 2) {
+      const data = sheet.getRange(2, 1, lastRow - 1, Math.min(maxColumns, 4)).getValues();
+      splitKeywords = data.map(row => row[0]).filter(Boolean);
+      fullKeywords = data.map(row => row[1]).filter(Boolean);
+      if (maxColumns >= 3) {
+        splitInstitutions = data.map(row => row[2]).filter(Boolean);
+      }
+      if (maxColumns >= 4) {
+        fullInstitutions = data.map(row => row[3]).filter(Boolean);
+      }
+    }
     
-    console.log(`割り勘キーワード: ${splitKeywords.length}件, 全額請求キーワード: ${fullKeywords.length}件を取得しました。`);
-    return { split: splitKeywords, full: fullKeywords };
+    console.log(`割り勘キーワード: ${splitKeywords.length}件, 全額請求キーワード: ${fullKeywords.length}件, 割り勘金融機関: ${splitInstitutions.length}件, 全額請求金融機関: ${fullInstitutions.length}件を取得しました。`);
+    return { 
+      split: splitKeywords, 
+      full: fullKeywords, 
+      splitInstitutions: splitInstitutions, 
+      fullInstitutions: fullInstitutions 
+    };
 
   } catch (e) {
     console.error('割り勘キーワードの取得に失敗しました。', e);

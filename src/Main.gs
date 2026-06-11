@@ -403,17 +403,22 @@ function initializeSheets() {
   sheet = spreadsheet.getSheetByName(SHEET_NAMES.SETTINGS_SPLITWISE);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(SHEET_NAMES.SETTINGS_SPLITWISE);
-    const headers = ["割り勘キーワード (50%)", "全額請求キーワード (100%)"];
+    const headers = [
+      "割り勘キーワード (50%)", 
+      "全額請求キーワード (100%)",
+      "割り勘金融機関 (50%)",
+      "全額請求金融機関 (100%)"
+    ];
     const sampleKeywords = [
-      ["割り勘", "立替"],
-      ["ワリカン", ""],
+      ["割り勘", "立替", "", "イオンカード"],
+      ["ワリカン", "", "", ""],
     ];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet
       .getRange(2, 1, sampleKeywords.length, sampleKeywords[0].length)
       .setValues(sampleKeywords);
     SpreadsheetApp.getUi().alert(
-      `「${SHEET_NAMES.SETTINGS_SPLITWISE}」シートを作成し、サンプルキーワードを定義しました。`
+      `「${SHEET_NAMES.SETTINGS_SPLITWISE}」シートを作成し、サンプル設定を定義しました。`
     );
   } else {
     SpreadsheetApp.getUi().alert(
