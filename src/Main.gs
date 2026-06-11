@@ -285,8 +285,9 @@ function showSplitwiseDialog() {
   const result = calculateSplitwiseTotal(year, month);
   const splitTotal = result.splitTotal;
   const fullTotal = result.fullTotal;
+  const specialSplitTotal = result.specialSplitTotal || 0;
   const transactions = result.transactions;
-  const finalAmount = splitTotal / 2 + fullTotal;
+  const finalAmount = splitTotal * 0.5 + specialSplitTotal * 0.31 + fullTotal;
 
   // Report_Splitwiseシートに出力
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(
@@ -298,10 +299,11 @@ function showSplitwiseDialog() {
   // サマリー情報を出力
   const summaryData = [
     ["割り勘対象 (50%)", splitTotal],
+    ["特別割り勘対象 (31%)", specialSplitTotal],
     ["全額請求対象 (100%)", fullTotal],
-    ["請求額 (割り勘/2 + 全額)", finalAmount],
+    ["請求額 (割り勘*0.5 + 特別*0.31 + 全額)", finalAmount],
   ];
-  sheet.getRange(3, 1, 3, 2).setValues(summaryData).setFontWeight("bold");
+  sheet.getRange(3, 1, 4, 2).setValues(summaryData).setFontWeight("bold");
 
   if (transactions.length > 0) {
     const headers = [
@@ -323,17 +325,12 @@ function showSplitwiseDialog() {
 
   const message =
     `${year}年${month}月の計算結果:\n` +
-    `--------------------
-` +
-    `割り勘対象 (50%): ${splitTotal} 円
-` +
-    `全額請求対象 (100%): ${fullTotal} 円
-` +
-    `--------------------
-` +
-    `請求額 (割り勘/2 + 全額): ${finalAmount} 円
-
-` +
+    `--------------------\n` +
+    `割り勘対象 (50%): ${splitTotal} 円\n` +
+    `特別割り勘対象 (31%): ${specialSplitTotal} 円\n` +
+    `全額請求対象 (100%): ${fullTotal} 円\n` +
+    `--------------------\n` +
+    `請求額 (割り勘*0.5 + 特別*0.31 + 全額): ${finalAmount} 円\n\n` +
     `詳細は「割り勘計算レポート」シートに出力しました。`;
 
   ui.alert(message);
