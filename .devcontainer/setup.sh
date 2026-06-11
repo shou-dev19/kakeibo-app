@@ -40,13 +40,23 @@ fi
 # ---------------------------------------------------------
 # 4. CLI ツールのインストール
 # ---------------------------------------------------------
-echo "Installing Gemini CLI..."
-npm install -g @google/gemini-cli
+echo "Installing Antigravity CLI..."
+curl -fsSL https://antigravity.google/cli/install.sh | bash
 
 echo "Installing Claude CLI..."
-curl -fsSL https://claude.ai/install.sh | bash
+if command -v claude &> /dev/null; then
+    echo "Claude CLI already installed, skipping to preserve auth."
+else
+    curl -fsSL https://claude.ai/install.sh | bash
+fi
 
 echo "Installing clasp..."
 npm install -g @google/clasp
+
+# ---------------------------------------------------------
+# 5. シェルエイリアスの設定
+# ---------------------------------------------------------
+echo "alias agyyolo='agy --dangerously-skip-permissions'" >> /home/node/.bashrc
+source ~/.bashrc
 
 echo "Dev Container setup complete!"
