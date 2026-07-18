@@ -1,5 +1,11 @@
 # Dependencies
 /node_modules
+node_modules/
+
+# Webapp build & Cloudflare local state
+webapp/dist/
+webapp/.wrangler/
+.wrangler/
 
 # Clasp
 .clasp.json
@@ -10,6 +16,10 @@
 .env
 .env.*
 !.env.example
+
+# Cloudflare Workers local dev vars (never commit real secrets)
+.dev.vars
+!.dev.vars.example
 
 # Build artifacts
 /dist
@@ -30,4 +40,4 @@ Thumbs.db
 
 # IDE settings
 .vscode/
-.idea/
+.idea/*.tsbuildinfo

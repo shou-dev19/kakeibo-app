@@ -1,0 +1,14 @@
+# Example local development vars for `wrangler dev` / `npm run dev`.
+# Copy this file to `.dev.vars` and adjust as needed:
+#
+#   cp .dev.vars.example .dev.vars
+#
+# `.dev.vars` is gitignored so local secrets never get committed.
+
+# Skip Cloudflare Access JWT verification during local development only.
+# NEVER enable this in production (it disables authentication entirely).
+DEV_BYPASS_ACCESS=true
+
+# Comma-separated allow-list of permitted email addresses (used when
+# DEV_BYPASS_ACCESS is not "true").
+ALLOWED_EMAILS=husband@example.com,wife@example.com
