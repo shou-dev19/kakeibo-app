@@ -40,4 +40,7 @@ Thumbs.db
 
 # IDE settings
 .vscode/
-.idea/*.tsbuildinfo
+.idea/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

@@ -1,0 +1,122 @@
+import { describe, it, expect } from "vitest";
+import app from "../src/server/index";
+import type { Bindings } from "../src/server/types";
+
+/**
+ * A small fake D1 that answers the specific SELECTs these route tests exercise.
+ * We match on SQL fragments and honor the year/month LIKE bind so month
+ * filtering is realistic.
+ */
+function makeDb(transactions: Array<Record<string, unknown>>, splitRules: unknown[] = []): D1Database {
+  return {
+    prepare(sql: string) {
+      const binds: unknown[] = [];
+      const stmt = {
+        bind(...args: unknown[]) {
+          binds.push(...args);
+          return stmt;
+        },
+        async first<T>() {
+          if (sql.includes("COUNT(*)")) {
+            return { count: filterTx(binds).length } as unknown as T;
+          }
+          return null;
+        },
+        async all<T>() {
+          if (sql.includes("FROM transactions")) {
+            return { results: filterTx(binds) as unknown as T[] };
+          }
+          if (sql.includes("FROM split_rules")) {
+            return { results: splitRules as unknown as T[] };
+          }
+          if (sql.includes("FROM excluded_categories")) {
+            return { results: [] as unknown as T[] };
+          }
+          if (sql.includes("FROM securities_balances")) {
+            return { results: [] as unknown as T[] };
+          }
+          return { results: [] as unknown as T[] };
+        },
+        async run() {
+          return { meta: { changes: 1, last_row_id: 1 } };
+        },
+      };
+
+      function filterTx(binds: unknown[]): Array<Record<string, unknown>> {
+        let out = transactions;
+        // Handle the date LIKE 'YYYY-MM-%' bind used by month queries.
+        const like = binds.find(
+          (b) => typeof b === "string" && /^\d{4}-\d{2}-%$/.test(b),
+        ) as string | undefined;
+        if (like) {
+          const prefix = like.slice(0, -1);
+          out = out.filter((t) => String(t.date).startsWith(prefix));
+        }
+        return out;
+      }
+
+      return stmt;
+    },
+  } as unknown as D1Database;
+}
+
+function env(db: D1Database): Bindings {
+  return {
+    DB: db,
+    ASSETS: {} as Fetcher,
+    DEV_BYPASS_ACCESS: "true",
+    ACCESS_TEAM_DOMAIN: "t",
+    ACCESS_AUD: "a",
+    ALLOWED_EMAILS: "x@example.com",
+  };
+}
+
+const txs = [
+  { id: 1, date: "2025-07-01", description: "スーパー", amount: 1000, type: "支出", institution: "銀行", category: "食料品", memo: null, balance: null, import_hash: "h1", created_at: "" },
+  { id: 2, date: "2025-07-02", description: "給与", amount: 300000, type: "収入", institution: "銀行", category: "給与", memo: null, balance: null, import_hash: "h2", created_at: "" },
+  { id: 3, date: "2025-06-15", description: "先月", amount: 500, type: "支出", institution: "銀行", category: "食料品", memo: null, balance: null, import_hash: "h3", created_at: "" },
+];
+
+describe("GET /api/transactions", () => {
+  it("returns a page with total", async () => {
+    const res = await app.request("/api/transactions?year=2025&month=7", {}, env(makeDb(txs)));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: unknown[]; total: number };
+    expect(body.total).toBe(2); // July only
+  });
+});
+
+describe("GET /api/reports/monthly", () => {
+  it("aggregates income vs expense for the month", async () => {
+    const res = await app.request("/api/reports/monthly?year=2025&month=7", {}, env(makeDb(txs)));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { totalIncome: number; totalExpense: number };
+    expect(body.totalIncome).toBe(300000);
+    expect(body.totalExpense).toBe(1000);
+  });
+
+  it("400s without year/month", async () => {
+    const res = await app.request("/api/reports/monthly", {}, env(makeDb(txs)));
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("GET /api/splitwise", () => {
+  it("computes billed totals for the month", async () => {
+    const rules = [{ id: 1, match_type: "keyword", pattern: "スーパー", rate: 50 }];
+    const res = await app.request("/api/splitwise?year=2025&month=7", {}, env(makeDb(txs, rules)));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { totalBilled: number };
+    expect(body.totalBilled).toBe(500); // 1000 * 50%
+  });
+});
+
+describe("GET /api/reports/assets", () => {
+  it("returns series and portfolio", async () => {
+    const res = await app.request("/api/reports/assets", {}, env(makeDb(txs)));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { series: unknown[]; portfolio: unknown };
+    expect(Array.isArray(body.series)).toBe(true);
+    expect(body.portfolio).toBeTruthy();
+  });
+});
