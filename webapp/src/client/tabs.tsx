@@ -1,7 +1,10 @@
 import type { ReactElement } from "react";
-import { Placeholder } from "./pages/Placeholder";
-
-export type TabKey = "home" | "report" | "import" | "settings";
+import type { TabKey } from "./nav";
+import { HomePage } from "./pages/HomePage";
+import { TransactionsPage } from "./pages/TransactionsPage";
+import { ReportPage } from "./pages/ReportPage";
+import { ImportPage } from "./pages/ImportPage";
+import { SettingsPage } from "./pages/SettingsPage";
 
 export interface Tab {
   key: TabKey;
@@ -11,48 +14,14 @@ export interface Tab {
 }
 
 export const TABS: Tab[] = [
+  { key: "home", label: "ホーム", icon: "🏠", render: () => <HomePage /> },
   {
-    key: "home",
-    label: "ホーム",
-    icon: "🏠",
-    render: () => (
-      <Placeholder
-        title="ホーム"
-        description="今月の収支・カテゴリ別支出・総資産をまとめて表示します。"
-      />
-    ),
+    key: "transactions",
+    label: "明細",
+    icon: "📄",
+    render: () => <TransactionsPage />,
   },
-  {
-    key: "report",
-    label: "レポート",
-    icon: "📊",
-    render: () => (
-      <Placeholder
-        title="レポート"
-        description="月次・年間レポートと資産推移を表示します。"
-      />
-    ),
-  },
-  {
-    key: "import",
-    label: "インポート",
-    icon: "📥",
-    render: () => (
-      <Placeholder
-        title="CSVインポート"
-        description="複数のCSVファイルをまとめて取り込みます。"
-      />
-    ),
-  },
-  {
-    key: "settings",
-    label: "設定",
-    icon: "⚙️",
-    render: () => (
-      <Placeholder
-        title="設定"
-        description="分類ルール・CSVフォーマット・割り勘ルール・除外カテゴリを編集します。"
-      />
-    ),
-  },
+  { key: "report", label: "レポート", icon: "📊", render: () => <ReportPage /> },
+  { key: "import", label: "インポート", icon: "📥", render: () => <ImportPage /> },
+  { key: "settings", label: "設定", icon: "⚙️", render: () => <SettingsPage /> },
 ];
