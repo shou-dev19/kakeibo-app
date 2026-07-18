@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "db:migrate:local": "wrangler d1 migrations apply kakeibo --local",
     "db:migrate:remote": "wrangler d1 migrations apply kakeibo --remote",
+    "db:import:sheets": "vite-node --config scripts/vite-node.config.ts scripts/migrate-from-sheets.ts",
     "deploy": "npm run build && wrangler deploy",
     "cf-typegen": "wrangler types"
   },

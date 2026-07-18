@@ -7,6 +7,12 @@ webapp/dist/
 webapp/.wrangler/
 .wrangler/
 
+# Sheets-migration temp output (generated SQL) — never commit
+webapp/.migrate-tmp/
+
+# Real financial data exported from the live spreadsheet — never commit
+input/
+
 # Clasp
 .clasp.json
 *.gs.js
@@ -44,3 +50,6 @@ Thumbs.db
 
 # TypeScript incremental build cache
 *.tsbuildinfo
+
+# Claude Code local settings
+.claude/settings.local.json

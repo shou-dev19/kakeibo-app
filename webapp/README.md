@@ -37,6 +37,52 @@ npm run db:migrate:local
 `migrations/0001_initial.sql`（スキーマ）と `migrations/0002_seed.sql`
 （GAS 版のハードコード初期値のシード）が順に適用されます。
 
+## 現行スプレッドシートからのデータ移行（移行ステップ2）
+
+現行 GAS 版スプレッドシートからエクスポートした 5 つの CSV をローカル D1 に
+一括投入します。実データ（金融情報）を含むため、CSV はリポジトリルートの
+`input/`（`.gitignore` 対象）に置きます。
+
+必要ファイル（`input/` 直下）:
+
+- `kakeibo-app - 取引履歴DB.csv`
+- `kakeibo-app - 証券残高DB.csv`
+- `kakeibo-app - 分類・除外設定.csv`
+- `kakeibo-app - 割り勘キーワード設定.csv`
+- `kakeibo-app - CSVフォーマット設定.csv`
+
+```bash
+# 事前にスキーマ適用（未適用の場合）
+npm run db:migrate:local
+# 5 CSV を読み込み → SQL 生成 → ローカル D1 へ投入 → 検証サマリー出力
+npm run db:import:sheets
+```
+
+移行の特性:
+
+- **完全リロード（冪等）**: 6 テーブル（`transactions` / `securities_balances` /
+  `category_rules` / `csv_formats` / `split_rules` / `excluded_categories`）を
+  DELETE してから再投入します。`0002_seed.sql` のサンプルデータは実データで
+  置き換えられます。何度実行しても結果は同じです。
+- **GAS 版ハードコード特例の再投入**: スクリプトが以下 2 件を明示的に投入します。
+  - 分類ルール: `keyword='十日市場', institution='イオンカード', category='食料品', priority=0`
+  - 割り勘ルール: `match_type='keyword', pattern='ﾖｺﾊﾏｼﾎｲｸﾘﾖｳ', rate=31`
+- **import_hash**: 取引履歴全体を 1 ファイル扱いで出現順にカウントし、
+  `src/shared/hash.ts` のロジックで算出します。
+- **検証**: 実行後にスクリプト自身が各テーブルの投入件数とソース行数の一致、
+  取引の合計金額・期間、重複ハッシュ件数（0 が期待値）を出力します。
+- 生成 SQL は `.migrate-tmp/`（`.gitignore` 対象）に書き出されます。
+
+### 本番 D1 への適用
+
+同じ手順を本番 D1 に適用する場合は、生成された SQL を `--remote` で流します
+（このスクリプトはローカルのみを対象とし、本番への実行は行いません）:
+
+```bash
+npm run db:import:sheets   # ローカル投入 + .migrate-tmp/migrate-from-sheets.sql 生成
+npx wrangler d1 execute kakeibo --remote --file=.migrate-tmp/migrate-from-sheets.sql
+```
+
 ## 開発サーバー
 
 ```bash
@@ -69,6 +115,7 @@ npm run dev
 | `npm run typecheck` | `tsc --noEmit` による型チェックのみ |
 | `npm run db:migrate:local` | ローカル D1 へマイグレーション適用 |
 | `npm run db:migrate:remote` | リモート D1 へマイグレーション適用（要ログイン） |
+| `npm run db:import:sheets` | 現行スプレッドシート CSV（`input/`）をローカル D1 へ完全リロード投入 |
 | `npm run deploy` | ビルド + Cloudflare へデプロイ（要ログイン） |
 
 ## ディレクトリ構成
