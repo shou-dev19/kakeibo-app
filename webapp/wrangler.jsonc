@@ -12,22 +12,22 @@
     "not_found_handling": "single-page-application",
     "binding": "ASSETS"
   },
-  // D1 database binding. database_id is a placeholder until the DB is provisioned.
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "kakeibo",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "126cfe91-f460-4d5f-83bb-fb1745ce9934",
       "migrations_dir": "migrations"
     }
   ],
-  // Cloudflare Access verification config (placeholders — fill on deploy).
+  // Cloudflare Access verification config.
   // DEV_BYPASS_ACCESS is intentionally NOT set here so it defaults to disabled
   // in production. Enable the bypass only for local dev via `.dev.vars`.
+  // ALLOWED_EMAILS is a Worker secret (`wrangler secret put ALLOWED_EMAILS`),
+  // not a var, so the addresses never enter version control.
   "vars": {
-    "ACCESS_TEAM_DOMAIN": "your-team.cloudflareaccess.com",
-    "ACCESS_AUD": "REPLACE_WITH_ACCESS_APPLICATION_AUD",
-    "ALLOWED_EMAILS": "husband@example.com,wife@example.com"
+    "ACCESS_TEAM_DOMAIN": "shou-devlog.cloudflareaccess.com",
+    "ACCESS_AUD": "c2dc4a1d725ce79bc30c200306517933a957fc95ae4f228c387bb53bd7275dba"
   },
   "observability": {
     "enabled": true
