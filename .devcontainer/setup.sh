@@ -11,8 +11,11 @@ echo "Starting Dev Container setup..."
 echo "Fixing volume permissions..."
 sudo chown -R node:node /home/node/.gemini
 sudo chown -R node:node /home/node/.claude
+sudo chown -R node:node /home/node/.codex
 sudo mkdir -p /home/node/.config/gh
 sudo chown -R node:node /home/node/.config/gh
+sudo mkdir -p /home/node/.config/gcloud
+sudo chown -R node:node /home/node/.config/gcloud
 
 sudo apt-get update
 
@@ -38,7 +41,7 @@ if [ -z "$(git config --global user.name)" ]; then
 fi
 
 # ---------------------------------------------------------
-# 4. CLI ツールのインストール
+# 3. CLI ツールのインストール
 # ---------------------------------------------------------
 echo "Installing Antigravity CLI..."
 curl -fsSL https://antigravity.google/cli/install.sh | bash
@@ -50,11 +53,15 @@ else
     curl -fsSL https://claude.ai/install.sh | bash
 fi
 
-echo "Installing clasp..."
-npm install -g @google/clasp
+echo "Installing Codex CLI..."
+if command -v codex &> /dev/null; then
+    echo "Codex CLI already installed, skipping to preserve auth."
+else
+    curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh
+fi
 
 # ---------------------------------------------------------
-# 5. シェルエイリアスの設定
+# 4. シェルエイリアスの設定
 # ---------------------------------------------------------
 echo "alias agyyolo='agy --dangerously-skip-permissions'" >> /home/node/.bashrc
 source ~/.bashrc
