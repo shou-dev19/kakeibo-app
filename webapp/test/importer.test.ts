@@ -69,6 +69,8 @@ const format: CsvFormat = {
   balance_col: null,
   header_rows: 1,
   encoding: "UTF-8",
+  header_signature: "日付,内容,金額",
+  expected_columns: 3,
 };
 
 const rules: CategoryRule[] = [
@@ -155,5 +157,20 @@ describe("previewImports", () => {
     const [p] = await previewImports(db, [file]);
     expect(p.count).toBe(2);
     expect(p.duplicateCount).toBe(2);
+  });
+});
+
+describe("manual format validation", () => {
+  it("returns an error instead of reporting a zero-row success", async () => {
+    const db = makeFakeDb({ formats: [format], rules });
+    const [result] = await previewImports(db, [
+      {
+        filename: "empty.csv",
+        contentBase64: b64("日付,内容,金額\ninvalid,架空店舗,500"),
+        formatName: format.name,
+      },
+    ]);
+    expect(result.error).toContain("有効な取引を読み取れませんでした");
+    expect(result.count).toBe(0);
   });
 });

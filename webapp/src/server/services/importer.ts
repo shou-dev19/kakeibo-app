@@ -6,8 +6,8 @@ import type { CategoryRule, CsvFormat } from "../../shared/types";
 import { parseCsv, type ParsedTransaction } from "../../shared/csv";
 import { categorizeMany } from "../../shared/categorize";
 import { assignImportHashes } from "../../shared/hash";
-import { detectFormat } from "../../shared/detectFormat";
-import { base64ToBytes, decodeCsvBytes } from "./decode";
+import { evaluateFormat, selectFormat } from "../../shared/detectFormat";
+import { base64ToBytes, decodeCsvBytesStrict } from "./decode";
 import {
   getCategoryRules,
   getCsvFormats,
@@ -44,67 +44,92 @@ export interface ImportResultFile {
   error: string | null;
 }
 
-/** Resolve which format to use for a file: explicit name, else auto-detect. */
-function resolveFormat(
-  text: string,
-  formats: CsvFormat[],
-  formatName: string | undefined,
-): { format: CsvFormat | null; confident: boolean } {
-  if (formatName) {
-    const f = formats.find((x) => x.name === formatName) ?? null;
-    return { format: f, confident: f != null };
-  }
-  const det = detectFormat(text, formats);
-  return { format: det.best, confident: det.confident };
+interface ResolvedFile {
+  format: CsvFormat | null;
+  text: string | null;
+  confident: boolean;
+  error: string | null;
 }
 
-/**
- * Decode a file to text. We try the resolved format's declared encoding first;
- * if no explicit format, we try each distinct declared encoding and pick the
- * one that produces the most parseable result during detection. To keep it
- * simple and deterministic, detection runs on the UTF-8 decode AND the
- * Shift_JIS decode and uses whichever yields a confident match.
- */
-function decodeWithFormats(
+/** Resolve a manual selection or evaluate each format with its own encoding. */
+function resolveFile(
   bytes: Uint8Array,
   formats: CsvFormat[],
   formatName: string | undefined,
-): { text: string; encoding: string } {
+): ResolvedFile {
   if (formatName) {
-    const f = formats.find((x) => x.name === formatName);
-    const enc = f?.encoding ?? "utf-8";
-    return { text: decodeCsvBytes(bytes, enc), encoding: enc };
+    const format = formats.find((candidate) => candidate.name === formatName) ?? null;
+    if (!format) {
+      return {
+        format: null,
+        text: null,
+        confident: false,
+        error: `定義されていないCSVフォーマットです: ${formatName}`,
+      };
+    }
+    try {
+      return {
+        format,
+        text: decodeCsvBytesStrict(bytes, format.encoding),
+        confident: true,
+        error: null,
+      };
+    } catch (error) {
+      return {
+        format: null,
+        text: null,
+        confident: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
-  // No explicit format: try each distinct encoding declared across formats and
-  // choose the decode under which some format detects confidently; fall back to
-  // UTF-8.
-  const encodings = [...new Set(formats.map((f) => f.encoding || "utf-8"))];
-  if (encodings.length === 0) encodings.push("utf-8");
 
-  let fallback = { text: decodeCsvBytes(bytes, encodings[0]), encoding: encodings[0] };
-  for (const enc of encodings) {
-    const text = decodeCsvBytes(bytes, enc);
-    const det = detectFormat(text, formats);
-    if (det.confident) return { text, encoding: enc };
-    // Keep UTF-8 as the preferred fallback if present.
-    if (enc === "utf-8") fallback = { text, encoding: enc };
+  const decoded = new Map<string, string | null>();
+  const evaluated: Array<{
+    format: CsvFormat;
+    text: string;
+    candidate: ReturnType<typeof evaluateFormat>;
+  }> = [];
+
+  for (const format of formats) {
+    const encodingKey = format.encoding.trim().toLowerCase();
+    if (!decoded.has(encodingKey)) {
+      try {
+        decoded.set(encodingKey, decodeCsvBytesStrict(bytes, format.encoding));
+      } catch {
+        decoded.set(encodingKey, null);
+      }
+    }
+    const text = decoded.get(encodingKey);
+    if (text == null) continue;
+    evaluated.push({ format, text, candidate: evaluateFormat(text, format) });
   }
-  return fallback;
+
+  const detection = selectFormat(evaluated.map((entry) => entry.candidate));
+  if (!detection.best) {
+    return {
+      format: null,
+      text: null,
+      confident: false,
+      error: detection.failureReason === "ambiguous"
+        ? "複数のCSVフォーマット候補が一致しました。手動で選択してください。"
+        : "フォーマットを自動判定できませんでした。手動で選択してください。",
+    };
+  }
+
+  const selected = evaluated.find((entry) => entry.format.id === detection.best?.id);
+  return {
+    format: detection.best,
+    text: selected?.text ?? null,
+    confident: detection.confident,
+    error: selected ? null : "CSVフォーマットの判定結果を取得できませんでした。",
+  };
 }
 
 /** A parsed, categorized, hash-assigned row ready for insertion. */
 type HashedRow = ParsedTransaction & { category: string; import_hash: string };
 
-/**
- * Parse + categorize + hash a single file's bytes. Never throws.
- *
- * Occurrence indices (n) are computed per file from scratch (starting at 0).
- * This is what makes re-uploading the exact same file fully idempotent: the
- * identical rows produce identical hashes, which collide with the stored ones
- * and are skipped. We intentionally do NOT seed n from the DB's existing
- * duplicate counts — doing so would shift a re-upload's hashes and defeat
- * idempotency.
- */
+/** Parse + categorize + hash a single file's bytes. Never throws. */
 async function processFile(
   file: ImportFileInput,
   formats: CsvFormat[],
@@ -117,28 +142,40 @@ async function processFile(
 }> {
   try {
     const bytes = base64ToBytes(file.contentBase64);
-    const { text } = decodeWithFormats(bytes, formats, file.formatName);
-    const { format, confident } = resolveFormat(text, formats, file.formatName);
-
-    if (!format) {
+    const resolved = resolveFile(bytes, formats, file.formatName);
+    if (resolved.error || !resolved.format || resolved.text == null) {
       return {
-        format: null,
-        confident: false,
+        format: resolved.format,
+        confident: resolved.confident,
         hashed: [],
-        error: "フォーマットを自動判定できませんでした。手動で選択してください。",
+        error: resolved.error,
       };
     }
 
-    const parsed = parseCsv(text, format);
+    const parsed = parseCsv(resolved.text, resolved.format);
+    if (parsed.length === 0) {
+      return {
+        format: resolved.format,
+        confident: resolved.confident,
+        hashed: [],
+        error: "選択したCSVフォーマットでは有効な取引を読み取れませんでした。",
+      };
+    }
+
     const categorized = categorizeMany(parsed, rules);
     const hashed = await assignImportHashes(categorized);
-    return { format, confident, hashed, error: null };
-  } catch (e) {
+    return {
+      format: resolved.format,
+      confident: resolved.confident,
+      hashed,
+      error: null,
+    };
+  } catch (error) {
     return {
       format: null,
       confident: false,
       hashed: [],
-      error: e instanceof Error ? e.message : String(e),
+      error: error instanceof Error ? error.message : String(error),
     };
   }
 }

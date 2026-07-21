@@ -89,7 +89,21 @@ export interface CsvFormatRow {
   balance_col: number | null;
   header_rows: number;
   encoding: string;
+  header_signature: string | null;
+  expected_columns: number | null;
 }
+
+const CSV_FORMAT_DETECTION: Record<string, { header: string | null; columns: number }> = {
+  "SBI新生銀行": { header: `"取引日","摘要","出金金額","入金金額","残高","メモ"`, columns: 6 },
+  "イオン銀行": { header: `"日付","お取引内容","お引出し","お預入れ","残高（お借入れはマイナス表示）"`, columns: 5 },
+  "住信SBIネット銀行": { header: `"日付","内容","出金金額(円)","入金金額(円)","残高(円)","メモ"`, columns: 6 },
+  "三井住友カード": { header: null, columns: 7 },
+  JCBW: { header: `"ご利用者","カテゴリ","ご利用日","ご利用先など","ご利用金額(￥)","支払区分","今回回数","訂正サイン","お支払い金額(￥)","国内／海外","摘要","備考"`, columns: 12 },
+  "イオンカード": { header: "ご利用日,利用者区分,ご利用先,支払方法,,,ご利用金額,備考,", columns: 9 },
+  "VIEWカード": { header: "ご利用年月日,ご利用箇所,ご利用額,払戻額,ご請求額（うち手数料・利息）,支払区分（回数）,今回回数,今回ご請求額・弁済金（うち手数料・利息）,現地通貨額,通貨略称,換算レート", columns: 11 },
+  "楽天カード": { header: `"利用日","利用店名・商品名","利用者","支払方法","利用金額","手数料/利息","支払総額","*","当月請求額","*","新規サイン"`, columns: 11 },
+  "東急カード": { header: null, columns: 13 },
+};
 
 // ---------------------------------------------------------------------------
 // Transformers. Each takes the full cell matrix INCLUDING the header row.
@@ -240,6 +254,7 @@ export function transformCsvFormats(rows: string[][]): CsvFormatRow[] {
     const date_col = toInt(cell(r, 1));
     const desc_col = toInt(cell(r, 2));
     if (date_col == null || desc_col == null) continue;
+    const detection = CSV_FORMAT_DETECTION[name];
     out.push({
       name,
       date_col,
@@ -247,8 +262,10 @@ export function transformCsvFormats(rows: string[][]): CsvFormatRow[] {
       expense_col: toInt(cell(r, 3)),
       income_col: toInt(cell(r, 4)),
       balance_col: toInt(cell(r, 5)),
-      header_rows: toInt(cell(r, 6)) ?? 1,
+      header_rows: name === "東急カード" ? 0 : (toInt(cell(r, 6)) ?? 1),
       encoding: cell(r, 7) || "UTF-8",
+      header_signature: detection?.header ?? null,
+      expected_columns: detection?.columns ?? null,
     });
   }
   return out;

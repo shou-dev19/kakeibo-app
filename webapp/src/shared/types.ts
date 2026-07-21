@@ -52,6 +52,8 @@ export interface CsvFormat {
   balance_col: number | null;
   header_rows: number;
   encoding: string;
+  header_signature: string | null;
+  expected_columns: number | null;
 }
 
 /** 割り勘ルール (split_rules) */

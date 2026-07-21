@@ -1,63 +1,103 @@
-import { describe, it, expect } from "vitest";
-import { detectFormat } from "../src/shared/detectFormat";
+import { describe, expect, it } from "vitest";
+import {
+  detectFormat,
+  evaluateFormat,
+  normalizeHeaderCell,
+} from "../src/shared/detectFormat";
 import type { CsvFormat } from "../src/shared/types";
 
-const sumitomo: CsvFormat = {
-  id: 1,
-  name: "三井住友カード",
-  date_col: 1,
-  desc_col: 2,
-  expense_col: 3,
-  income_col: null,
-  balance_col: null,
-  header_rows: 1,
-  encoding: "Shift_JIS",
-};
+function format(overrides: Partial<CsvFormat> = {}): CsvFormat {
+  return {
+    id: 1,
+    name: "形式A",
+    date_col: 1,
+    desc_col: 2,
+    expense_col: 3,
+    income_col: null,
+    balance_col: null,
+    header_rows: 1,
+    encoding: "UTF-8",
+    header_signature: "日付,内容,金額",
+    expected_columns: 3,
+    ...overrides,
+  };
+}
 
-// A format that reads columns in a different order (date in col 2), so it
-// should fail to parse a 三井住友 file.
-const other: CsvFormat = {
-  id: 2,
-  name: "別フォーマット",
-  date_col: 2,
-  desc_col: 3,
-  expense_col: 4,
-  income_col: null,
-  balance_col: null,
-  header_rows: 1,
-  encoding: "UTF-8",
-};
-
-const sumitomoCsv = [
+const csv = [
   "日付,内容,金額",
-  "2025/07/01,コンビニ,500",
-  "2025/07/02,スーパー,1200",
-  "2025/07/03,カフェ,800",
+  "2026/07/01,架空店舗A,500",
+  "2026/07/02,架空店舗B,1200",
 ].join("\n");
 
 describe("detectFormat", () => {
-  it("confidently selects the format that parses the file", () => {
-    const r = detectFormat(sumitomoCsv, [sumitomo, other]);
-    expect(r.confident).toBe(true);
-    expect(r.best?.name).toBe("三井住友カード");
+  it("selects the only eligible matching header signature", () => {
+    const other = format({
+      id: 2,
+      name: "形式B",
+      header_signature: "取引日,摘要,支出額",
+    });
+    const result = detectFormat(csv, [other, format()]);
+    expect(result.confident).toBe(true);
+    expect(result.best?.name).toBe("形式A");
   });
 
-  it("reports no confident match when no format parses well", () => {
-    // A file whose date column never yields a valid date under any format.
-    const garbage = ["h1,h2,h3", "x,y,z", "p,q,r"].join("\n");
-    const r = detectFormat(garbage, [sumitomo, other]);
-    expect(r.confident).toBe(false);
-    expect(r.best).toBeNull();
+  it("searches all skipped prefix rows for the identifying header", () => {
+    const withPreamble = format({ header_rows: 2 });
+    const text = ["日付,内容,金額", "個別情報", "2026/07/01,架空店舗,500"].join("\n");
+    expect(detectFormat(text, [withPreamble]).best?.name).toBe("形式A");
   });
 
-  it("returns no candidates when no formats are registered", () => {
-    const r = detectFormat(sumitomoCsv, []);
-    expect(r.confident).toBe(false);
-    expect(r.candidates).toEqual([]);
+  it("supports a wildcard only for explicitly variable header cells", () => {
+    const monthly = format({ header_signature: "日付,*,金額" });
+    expect(detectFormat(csv, [monthly]).best?.name).toBe("形式A");
   });
 
-  it("ranks the better-parsing format first in candidates", () => {
-    const r = detectFormat(sumitomoCsv, [other, sumitomo]);
-    expect(r.candidates[0].format.name).toBe("三井住友カード");
+  it("rejects changed column counts even when date and amount parse", () => {
+    const changed = ["日付,内容,金額,追加列", "2026/07/01,架空店舗,500,x"].join("\n");
+    const result = detectFormat(changed, [format()]);
+    expect(result.confident).toBe(false);
+    expect(result.candidates[0].reasons).toContain("header_mismatch");
+  });
+
+  it("reports ambiguity instead of force-ranking duplicate signatures", () => {
+    const duplicate = format({ id: 2, name: "形式B" });
+    const result = detectFormat(csv, [format(), duplicate]);
+    expect(result.best).toBeNull();
+    expect(result.failureReason).toBe("ambiguous");
+  });
+
+  it("selects a unique headerless format by expected column count", () => {
+    const sevenColumns = format({
+      header_rows: 0,
+      header_signature: null,
+      expected_columns: 7,
+    });
+    const thirteenColumns = format({
+      id: 2,
+      name: "形式B",
+      header_rows: 0,
+      header_signature: null,
+      expected_columns: 13,
+      expense_col: 7,
+    });
+    const text = "2026/07/01,架空店舗,500,x,x,x,x";
+    expect(detectFormat(text, [sevenColumns, thirteenColumns]).best?.name).toBe("形式A");
+  });
+
+  it("excludes formats whose detection settings are incomplete", () => {
+    const candidate = evaluateFormat(csv, format({ expected_columns: null }));
+    expect(candidate.eligible).toBe(false);
+    expect(candidate.reasons).toContain("settings_missing");
+  });
+
+  it("returns no match for unknown content or an empty format list", () => {
+    expect(detectFormat("x,y,z\np,q,r", [format()]).best).toBeNull();
+    expect(detectFormat(csv, []).failureReason).toBe("no_match");
+  });
+});
+
+describe("normalizeHeaderCell", () => {
+  it("removes BOM, normalizes width, trims and collapses whitespace", () => {
+    expect(normalizeHeaderCell("\uFEFF  金額（ 円 ）  ")).toBe("金額( 円 )");
   });
 });

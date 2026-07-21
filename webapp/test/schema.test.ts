@@ -11,6 +11,10 @@ const seedSql = readFileSync(
   fileURLToPath(new URL("../migrations/0002_seed.sql", import.meta.url)),
   "utf8",
 );
+const detectionSql = readFileSync(
+  fileURLToPath(new URL("../migrations/0003_csv_format_detection.sql", import.meta.url)),
+  "utf8",
+);
 
 describe("initial migration schema", () => {
   it("creates every table declared in TABLE_NAMES", () => {
@@ -53,5 +57,23 @@ describe("seed migration", () => {
     expect(seedSql).toMatch(
       /'三井住友カード',\s*1,\s*2,\s*3,\s*NULL,\s*NULL,\s*1,\s*'Shift_JIS'/,
     );
+  });
+});
+
+describe("CSV format detection migration", () => {
+  it("adds configurable header signatures and expected column counts", () => {
+    expect(detectionSql).toMatch(/ADD COLUMN header_signature TEXT/);
+    expect(detectionSql).toMatch(/ADD COLUMN expected_columns INTEGER/);
+  });
+
+  it("backfills all nine known formats and fixes the headerless format", () => {
+    for (const name of [
+      "SBI新生銀行", "イオン銀行", "住信SBIネット銀行",
+      "三井住友カード", "JCBW", "イオンカード",
+      "VIEWカード", "楽天カード", "東急カード",
+    ]) {
+      expect(detectionSql).toContain("WHERE name = '" + name + "'");
+    }
+    expect(detectionSql).toMatch(/expected_columns = 13,\s*header_rows = 0/);
   });
 });

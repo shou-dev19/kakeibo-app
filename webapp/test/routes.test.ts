@@ -120,3 +120,42 @@ describe("GET /api/reports/assets", () => {
     expect(body.portfolio).toBeTruthy();
   });
 });
+
+describe("POST /api/settings/csv-formats", () => {
+  const valid = {
+    name: "テスト形式",
+    date_col: 1,
+    desc_col: 2,
+    expense_col: 3,
+    income_col: null,
+    balance_col: null,
+    header_rows: 1,
+    encoding: "UTF-8",
+    header_signature: "日付,内容,金額",
+    expected_columns: 3,
+  };
+
+  it("accepts valid detection metadata", async () => {
+    const res = await app.request(
+      "/api/settings/csv-formats",
+      { method: "POST", body: JSON.stringify(valid) },
+      env(makeDb([])),
+    );
+    expect(res.status).toBe(201);
+  });
+
+  it("rejects missing, fractional, or headerless-invalid detection metadata", async () => {
+    for (const body of [
+      { ...valid, expected_columns: null },
+      { ...valid, expected_columns: 3.5 },
+      { ...valid, header_rows: 0 },
+    ]) {
+      const res = await app.request(
+        "/api/settings/csv-formats",
+        { method: "POST", body: JSON.stringify(body) },
+        env(makeDb([])),
+      );
+      expect(res.status).toBe(400);
+    }
+  });
+});

@@ -13,6 +13,8 @@ function fmt(overrides: Partial<CsvFormat> = {}): CsvFormat {
     balance_col: 5,
     header_rows: 1,
     encoding: "UTF-8",
+    header_signature: null,
+    expected_columns: null,
     ...overrides,
   };
 }

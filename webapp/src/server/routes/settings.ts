@@ -4,6 +4,7 @@ import type {
   ExclusionScope,
   SplitMatchType,
 } from "../../shared/types";
+import { parseCsvRows } from "../../shared/csv";
 import {
   deleteCategoryRule,
   deleteCsvFormat,
@@ -94,8 +95,17 @@ settings.delete("/category-rules/:id", async (c) => {
 function parseCsvFormatBody(body: Record<string, unknown>) {
   const dateCol = toNullableInt(body.date_col);
   const descCol = toNullableInt(body.desc_col);
+  const expectedColumns = toNullableInt(body.expected_columns);
+  const headerRows = toNullableInt(body.header_rows) ?? 1;
+  const headerSignature = toNullableString(body.header_signature);
   if (typeof body.name !== "string" || body.name.trim() === "") return null;
   if (dateCol == null || descCol == null) return null;
+  if (!Number.isInteger(Number(body.expected_columns))) return null;
+  if (!Number.isInteger(Number(body.header_rows ?? 1))) return null;
+  if (expectedColumns == null || expectedColumns < 1 || headerRows < 0) return null;
+  if (headerSignature != null) {
+    if (headerRows < 1 || parseCsvRows(headerSignature).length !== 1) return null;
+  }
   return {
     name: body.name.trim(),
     date_col: dateCol,
@@ -103,10 +113,12 @@ function parseCsvFormatBody(body: Record<string, unknown>) {
     expense_col: toNullableInt(body.expense_col),
     income_col: toNullableInt(body.income_col),
     balance_col: toNullableInt(body.balance_col),
-    header_rows: toNullableInt(body.header_rows) ?? 1,
+    header_rows: headerRows,
     encoding: typeof body.encoding === "string" && body.encoding.trim() !== ""
       ? body.encoding.trim()
       : "UTF-8",
+    header_signature: headerSignature,
+    expected_columns: expectedColumns,
   };
 }
 
@@ -118,7 +130,7 @@ settings.get("/csv-formats", async (c) => {
 settings.post("/csv-formats", async (c) => {
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
   const f = body ? parseCsvFormatBody(body) : null;
-  if (!f) return c.json({ error: "name, date_col and desc_col are required" }, 400);
+  if (!f) return c.json({ error: "CSVフォーマットの設定値が不正です" }, 400);
   const id = await insertCsvFormat(c.env.DB, f);
   return c.json({ id }, 201);
 });
@@ -128,7 +140,7 @@ settings.patch("/csv-formats/:id", async (c) => {
   if (id == null) return c.json({ error: "invalid id" }, 400);
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
   const f = body ? parseCsvFormatBody(body) : null;
-  if (!f) return c.json({ error: "name, date_col and desc_col are required" }, 400);
+  if (!f) return c.json({ error: "CSVフォーマットの設定値が不正です" }, 400);
   await updateCsvFormat(c.env.DB, id, f);
   return c.json({ ok: true });
 });

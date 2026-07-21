@@ -21,6 +21,8 @@ type Draft = {
   balance_col: string;
   header_rows: string;
   encoding: string;
+  header_signature: string;
+  expected_columns: string;
 };
 
 const emptyDraft: Draft = {
@@ -32,6 +34,8 @@ const emptyDraft: Draft = {
   balance_col: "",
   header_rows: "1",
   encoding: "UTF-8",
+  header_signature: "",
+  expected_columns: "3",
 };
 
 /** CSVフォーマット定義の一覧 + CRUD（列番号は1-based）。 */
@@ -113,6 +117,8 @@ function FormatModal({
           balance_col: format.balance_col == null ? "" : String(format.balance_col),
           header_rows: String(format.header_rows),
           encoding: format.encoding,
+          header_signature: format.header_signature ?? "",
+          expected_columns: format.expected_columns == null ? "" : String(format.expected_columns),
         }
       : emptyDraft,
   );
@@ -127,8 +133,9 @@ function FormatModal({
     }
     const dateCol = num(draft.date_col);
     const descCol = num(draft.desc_col);
-    if (dateCol == null || descCol == null) {
-      onToast.error("日付列・内容列は必須です");
+    const expectedColumns = num(draft.expected_columns);
+    if (dateCol == null || descCol == null || expectedColumns == null || expectedColumns < 1) {
+      onToast.error("日付列・内容列・想定列数は必須です");
       return;
     }
     setBusy(true);
@@ -141,6 +148,8 @@ function FormatModal({
       balance_col: num(draft.balance_col),
       header_rows: num(draft.header_rows) ?? 1,
       encoding: draft.encoding.trim() || "UTF-8",
+      header_signature: draft.header_signature.trim() || null,
+      expected_columns: expectedColumns,
     };
     try {
       if (format) await api.updateCsvFormat(format.id, body);
@@ -196,6 +205,9 @@ function FormatModal({
           <Field label="残高列（任意）">
             <NumInput value={draft.balance_col} onChange={(v) => set("balance_col", v)} />
           </Field>
+          <Field label="想定列数">
+            <NumInput value={draft.expected_columns} onChange={(v) => set("expected_columns", v)} />
+          </Field>
           <Field label="ヘッダー行数">
             <NumInput value={draft.header_rows} onChange={(v) => set("header_rows", v)} />
           </Field>
@@ -209,6 +221,14 @@ function FormatModal({
             <option value="UTF-8">UTF-8</option>
             <option value="Shift_JIS">Shift_JIS</option>
           </select>
+        </Field>
+        <Field label="判定用ヘッダー署名（ヘッダーなしは空欄、可変セルは *）">
+          <textarea
+            value={draft.header_signature}
+            onChange={(e) => set("header_signature", e.target.value)}
+            rows={3}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          />
         </Field>
       </div>
       <ModalActions

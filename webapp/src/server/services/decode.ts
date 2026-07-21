@@ -46,6 +46,20 @@ export function decodeCsvBytes(
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
+/** Decode strictly for format detection; malformed bytes and unknown labels fail. */
+export function decodeCsvBytesStrict(
+  bytes: Uint8Array,
+  encoding: string | null | undefined,
+): string {
+  const label = normalizeEncodingLabel(encoding);
+  try {
+    const text = new TextDecoder(label, { fatal: true, ignoreBOM: false }).decode(bytes);
+    return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  } catch {
+    throw new Error("設定された文字コードでCSVを読み取れませんでした。");
+  }
+}
+
 /** Decode a base64 string to a Uint8Array (Workers/Node both provide atob). */
 export function base64ToBytes(b64: string): Uint8Array {
   const binary = atob(b64);

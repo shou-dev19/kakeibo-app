@@ -116,6 +116,11 @@ export function ImportPage() {
     setResults(null);
   };
 
+  const canImport =
+    previews != null &&
+    previews.length === staged.length &&
+    previews.every((preview) => preview.error == null && preview.detectedFormat != null);
+
   return (
     <Page title="CSVインポート">
       {/* Drop zone */}
@@ -228,27 +233,24 @@ export function ImportPage() {
                     </div>
                   )}
 
-                  {/* Manual format override (shown when detection failed or to correct) */}
-                  {preview &&
-                    (!preview.detectedFormat || !preview.detectionConfident) && (
-                      <div className="mt-2">
-                        <label className="mr-2 text-xs text-gray-500">
-                          フォーマットを手動選択:
-                        </label>
-                        <select
-                          value={s.formatName ?? ""}
-                          onChange={(e) => setFormatOverride(i, e.target.value)}
-                          className="rounded border border-gray-300 px-2 py-1 text-xs"
-                        >
-                          <option value="">自動判定</option>
-                          {formatNames.map((n) => (
-                            <option key={n} value={n}>
-                              {n}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+                  {/* Manual format override is always available. */}
+                  <div className="mt-2">
+                    <label className="mr-2 text-xs text-gray-500">
+                      フォーマットを手動選択:
+                    </label>
+                    <select
+                      value={s.formatName ?? ""}
+                      onChange={(e) => setFormatOverride(i, e.target.value)}
+                      className="rounded border border-gray-300 px-2 py-1 text-xs"
+                    >
+                      <option value="">自動判定</option>
+                      {formatNames.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </li>
               );
             })}
@@ -258,7 +260,7 @@ export function ImportPage() {
             <Button variant="secondary" onClick={() => runPreview()} disabled={busy}>
               {busy && !results ? "確認中..." : "内容を確認（プレビュー）"}
             </Button>
-            <Button onClick={runImport} disabled={busy}>
+            <Button onClick={runImport} disabled={busy || !canImport}>
               {busy ? "取込中..." : "まとめてインポート"}
             </Button>
           </div>

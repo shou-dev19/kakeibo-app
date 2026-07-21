@@ -160,6 +160,8 @@ describe("transformCsvFormats", () => {
       balance_col: 5,
       header_rows: 1,
       encoding: "UTF-8",
+      header_signature: `"取引日","摘要","出金金額","入金金額","残高","メモ"`,
+      expected_columns: 6,
     });
     expect(out[1].income_col).toBeNull();
     expect(out[1].balance_col).toBeNull();

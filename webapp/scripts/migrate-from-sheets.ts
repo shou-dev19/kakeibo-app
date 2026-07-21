@@ -216,6 +216,8 @@ interface SqlInput {
     balance_col: number | null;
     header_rows: number;
     encoding: string;
+    header_signature: string | null;
+    expected_columns: number | null;
   }[];
   splitRules: { match_type: string; pattern: string; rate: number }[];
   excludedCategories: { category: string; scope: string }[];
@@ -292,9 +294,9 @@ export function buildSql(input: SqlInput): string {
   parts.push(
     insertChunks(
       "csv_formats",
-      ["name", "date_col", "desc_col", "expense_col", "income_col", "balance_col", "header_rows", "encoding"],
+      ["name", "date_col", "desc_col", "expense_col", "income_col", "balance_col", "header_rows", "encoding", "header_signature", "expected_columns"],
       input.csvFormats.map((f) => [
-        f.name, f.date_col, f.desc_col, f.expense_col, f.income_col, f.balance_col, f.header_rows, f.encoding,
+        f.name, f.date_col, f.desc_col, f.expense_col, f.income_col, f.balance_col, f.header_rows, f.encoding, f.header_signature, f.expected_columns,
       ]),
     ),
   );
