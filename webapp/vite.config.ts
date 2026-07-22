@@ -5,6 +5,11 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 
 // A single Worker serves the React SPA (static assets) and the Hono API (/api/*).
 export default defineConfig({
+  // Bind to all interfaces (not just IPv6 loopback) so the devcontainer's
+  // port forwarding (which connects via IPv4) can reach the dev server.
+  server: {
+    host: true,
+  },
   plugins: [react(), tailwindcss(), cloudflare()],
   build: {
     rollupOptions: {
