@@ -78,11 +78,35 @@ const txs = [
 ];
 
 describe("GET /api/transactions", () => {
-  it("returns a page with total", async () => {
-    const res = await app.request("/api/transactions?year=2025&month=7", {}, env(makeDb(txs)));
+  it("returns split rates using priority while preserving the filtered page total", async () => {
+    const listTxs = [
+      txs[0],
+      { ...txs[1], description: "スーパー給与" },
+      txs[2],
+      { id: 4, date: "2025-07-03", description: "対象外", amount: 800, type: "支出", institution: "銀行", category: "日用品", memo: null, balance: null, import_hash: "h4", created_at: "" },
+      { id: 5, date: "2025-07-04", description: "スーパー振替", amount: 300, type: "支出", institution: "銀行", category: "振替", memo: null, balance: null, import_hash: "h5", created_at: "" },
+    ];
+    const rules = [
+      { id: 1, match_type: "keyword", pattern: "スーパー", rate: 100, priority: 100 },
+      { id: 2, match_type: "keyword", pattern: "スーパー", rate: 50, priority: 10 },
+    ];
+    const res = await app.request(
+      "/api/transactions?year=2025&month=7",
+      {},
+      env(makeDb(listTxs, rules)),
+    );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { items: unknown[]; total: number };
-    expect(body.total).toBe(2); // July only
+    const body = (await res.json()) as {
+      items: Array<{ description: string; splitRate?: number | null }>;
+      total: number;
+    };
+    expect(body.total).toBe(4); // July only; the June transaction remains excluded.
+    expect(Object.fromEntries(body.items.map((item) => [item.description, item.splitRate]))).toEqual({
+      "スーパー": 50, // priority 10 wins over the matching priority 100 rule.
+      "スーパー給与": null, // Matches the rules, but income is ineligible.
+      "対象外": null,
+      "スーパー振替": null,
+    });
   });
 });
 

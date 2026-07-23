@@ -112,6 +112,21 @@ export function matchSplitRule(
 }
 
 /**
+ * Find the first matching rule for an eligible split-payment transaction.
+ * Only expenses outside the transfer category can be split. The caller owns
+ * sorting `sortedRules`; this function preserves that supplied precedence.
+ */
+export function matchEligibleSplitRule(
+  tx: SplitwiseTransaction,
+  sortedRules: SplitRule[],
+): SplitRule | null {
+  if (tx.type !== "支出") return null;
+  if ((tx.category ?? "") === TRANSFER_CATEGORY) return null;
+
+  return matchSplitRule(tx, sortedRules);
+}
+
+/**
  * Compute the split-payment result for a month's transactions.
  * Only type='支出' with category !== '振替' are eligible.
  *
@@ -130,10 +145,7 @@ export function calculateSplitwise(
   const subtotalMap = new Map<number, SplitwiseRateSubtotal>();
 
   for (const tx of txs) {
-    if (tx.type !== "支出") continue;
-    if ((tx.category ?? "") === TRANSFER_CATEGORY) continue;
-
-    const rule = matchSplitRule(tx, sorted);
+    const rule = matchEligibleSplitRule(tx, sorted);
     if (!rule) continue;
 
     const rate = rule.rate;

@@ -9,6 +9,7 @@ import {
   formatYen,
   type YearMonth,
 } from "../lib/format";
+import { getCategoryColor } from "../lib/categoryColors";
 import { MonthSwitcher } from "../components/MonthSwitcher";
 import { Modal } from "../components/Modal";
 import {
@@ -200,38 +201,56 @@ function TransactionsContent({
             {Math.min((page + 1) * PAGE_SIZE, total)}件を表示）
           </p>
           <ul className="flex flex-col gap-2">
-            {query.data?.items.map((tx) => (
-              <li key={tx.id}>
-                <Card
-                  className="!p-3"
-                  onClick={() => setEditing(tx)}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-gray-800">
-                        {tx.description}
-                      </p>
-                      <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-gray-500">
-                        <span>{formatShortDate(tx.date)}</span>
-                        {tx.institution && <span>{tx.institution}</span>}
-                        <span className="rounded bg-teal-50 px-1.5 py-0.5 text-teal-700">
-                          {tx.category ?? "未分類"}
-                        </span>
-                        {tx.memo && <span className="text-gray-400">📝{tx.memo}</span>}
-                      </p>
+            {query.data?.items.map((tx) => {
+              const categoryName = tx.category?.trim() || "未分類";
+              const categoryColor = getCategoryColor(categoryName);
+
+              return (
+                <li key={tx.id}>
+                  <Card
+                    className="!p-3"
+                    onClick={() => setEditing(tx)}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-gray-800">
+                          {tx.description}
+                        </p>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+                          <span>{formatShortDate(tx.date)}</span>
+                          {tx.institution && <span>{tx.institution}</span>}
+                          <span
+                            className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-gray-700"
+                            style={{ backgroundColor: `${categoryColor}1A` }}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className="size-1.5 rounded-full"
+                              style={{ backgroundColor: categoryColor }}
+                            />
+                            {categoryName}
+                          </span>
+                          {tx.splitRate !== null && (
+                            <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-indigo-700">
+                              相手負担 {tx.splitRate}%
+                            </span>
+                          )}
+                          {tx.memo && <span className="text-gray-400">📝{tx.memo}</span>}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 text-sm font-bold tabular-nums ${
+                          tx.type === "収入" ? "text-emerald-600" : "text-rose-600"
+                        }`}
+                      >
+                        {tx.type === "収入" ? "+" : "-"}
+                        {formatYen(tx.amount)}
+                      </span>
                     </div>
-                    <span
-                      className={`shrink-0 text-sm font-bold tabular-nums ${
-                        tx.type === "収入" ? "text-emerald-600" : "text-rose-600"
-                      }`}
-                    >
-                      {tx.type === "収入" ? "+" : "-"}
-                      {formatYen(tx.amount)}
-                    </span>
-                  </div>
-                </Card>
-              </li>
-            ))}
+                  </Card>
+                </li>
+              );
+            })}
           </ul>
 
           {/* Paging */}

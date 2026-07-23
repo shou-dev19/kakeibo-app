@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   calculateSplitwise,
+  matchEligibleSplitRule,
   matchSplitRule,
   sortSplitRules,
   type SplitwiseTransaction,
@@ -148,6 +149,31 @@ describe("matchSplitRule", () => {
     expect(
       matchSplitRule(tx({ description: "無関係", institution: "現金" }), sortSplitRules(rules)),
     ).toBeNull();
+  });
+});
+
+describe("matchEligibleSplitRule", () => {
+  const overlappingRules: SplitRule[] = [
+    { id: 1, match_type: "keyword", pattern: "対象", rate: 100, priority: 100 },
+    { id: 2, match_type: "keyword", pattern: "対象", rate: 50, priority: 10 },
+  ];
+
+  it("returns the first matching rule from the supplied priority-sorted rules", () => {
+    const rule = matchEligibleSplitRule(
+      tx({ description: "割り勘対象" }),
+      sortSplitRules(overlappingRules),
+    );
+
+    expect(rule?.id).toBe(2);
+    expect(rule?.rate).toBe(50);
+  });
+
+  it.each([
+    ["income", tx({ description: "割り勘対象", type: "収入" })],
+    ["transfer", tx({ description: "割り勘対象", category: "振替" })],
+    ["unmatched", tx({ description: "無関係" })],
+  ])("returns null for %s transactions", (_case, transaction) => {
+    expect(matchEligibleSplitRule(transaction, sortSplitRules(overlappingRules))).toBeNull();
   });
 });
 

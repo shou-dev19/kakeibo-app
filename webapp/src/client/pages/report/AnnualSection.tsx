@@ -12,6 +12,7 @@ import {
 } from "../../lib/format";
 import { Card, EmptyState, ErrorMessage, Spinner } from "../../components/ui";
 import { CategoryPie, type PieDatum } from "../../components/charts";
+import { getCategoryColor } from "../../lib/categoryColors";
 
 /**
  * Annual report: trailing-12-month summary table + per-category monthly table
@@ -180,7 +181,7 @@ export function AnnualSection({ initial }: { initial?: YearMonth }) {
             {avgPie.length === 0 ? (
               <EmptyState message="支出データがありません" />
             ) : (
-              <CategoryPie data={avgPie} />
+              <CategoryPie data={avgPie} colorForName={getCategoryColor} />
             )}
           </Card>
 

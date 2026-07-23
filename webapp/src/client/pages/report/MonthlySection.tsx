@@ -17,7 +17,8 @@ import {
   Spinner,
   Stat,
 } from "../../components/ui";
-import { CategoryPie, CHART_COLORS, type PieDatum } from "../../components/charts";
+import { CategoryPie, type PieDatum } from "../../components/charts";
+import { getCategoryColor } from "../../lib/categoryColors";
 
 /** Monthly report: summary + category pie/list with drilldown to 明細. */
 export function MonthlySection({ initial }: { initial?: YearMonth }) {
@@ -64,6 +65,7 @@ export function MonthlySection({ initial }: { initial?: YearMonth }) {
                     name: c.category,
                     value: c.amount,
                   }))}
+                  colorForName={getCategoryColor}
                   onSliceClick={(name) =>
                     go("transactions", {
                       category: name,
@@ -77,7 +79,7 @@ export function MonthlySection({ initial }: { initial?: YearMonth }) {
               <Card>
                 <h3 className="mb-2 text-sm font-semibold text-gray-700">内訳</h3>
                 <ul className="flex flex-col divide-y divide-gray-100">
-                  {report.data.categoryBreakdown.map((c, i) => (
+                  {report.data.categoryBreakdown.map((c) => (
                     <li key={c.category}>
                       <button
                         type="button"
@@ -94,7 +96,7 @@ export function MonthlySection({ initial }: { initial?: YearMonth }) {
                           <span
                             className="h-3 w-3 shrink-0 rounded-sm"
                             style={{
-                              backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+                              backgroundColor: getCategoryColor(c.category),
                             }}
                           />
                           {c.category}

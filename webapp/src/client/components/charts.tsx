@@ -10,23 +10,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { CATEGORY_COLORS } from "../lib/categoryColors";
 import { formatYen } from "../lib/format";
-
-/** A qualitative palette that reads well on white. */
-export const CHART_COLORS = [
-  "#0d9488",
-  "#f59e0b",
-  "#3b82f6",
-  "#ef4444",
-  "#8b5cf6",
-  "#10b981",
-  "#ec4899",
-  "#6366f1",
-  "#f97316",
-  "#14b8a6",
-  "#84cc16",
-  "#a855f7",
-];
 
 export interface PieDatum {
   name: string;
@@ -38,10 +23,12 @@ export function CategoryPie({
   data,
   onSliceClick,
   height = 240,
+  colorForName,
 }: {
   data: PieDatum[];
   onSliceClick?: (name: string) => void;
   height?: number;
+  colorForName?: (name: string) => string;
 }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -62,10 +49,10 @@ export function CategoryPie({
               : undefined
           }
         >
-          {data.map((_, i) => (
+          {data.map((datum, i) => (
             <Cell
               key={i}
-              fill={CHART_COLORS[i % CHART_COLORS.length]}
+              fill={colorForName?.(datum.name) ?? CATEGORY_COLORS[i % CATEGORY_COLORS.length]}
               cursor={onSliceClick ? "pointer" : "default"}
             />
           ))}
