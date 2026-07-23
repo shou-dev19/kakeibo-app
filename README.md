@@ -2,7 +2,7 @@
 
 CSV 明細を取り込み、家計の収支・資産・割り勘を管理する家計簿アプリです。
 
-現行アプリは `webapp/` にある TypeScript 製の Web アプリケーションで、React、Hono、Cloudflare Workers、Cloudflare D1（SQLite）で構成されています。ルート直下の `src/` には、移行元となる Google Apps Script（GAS）版を残しています。
+現行アプリは `webapp/` にある TypeScript 製の Web アプリケーションで、React、Hono、Cloudflare Workers、Cloudflare D1（SQLite）で構成されています。移行元だった Google Apps Script（GAS）版は `webapp/` への移行完了に伴い削除済みで、当時の設計・移行の記録は `docs/` に残しています。
 
 ## 主な機能
 
@@ -94,13 +94,12 @@ npm run deploy
 │   ├── src/client/         # React SPA
 │   ├── src/server/         # Hono API / Workers エントリ
 │   ├── migrations/         # D1 スキーマと初期データ
-│   ├── scripts/            # GAS 版データの移行スクリプト
+│   ├── scripts/            # 旧スプレッドシート版データの移行スクリプト
 │   └── test/               # Vitest テスト
-├── src/                    # 旧 GAS 版（移行元）
-└── docs/                   # 要件・設計・移行計画
+└── docs/                   # 要件・設計・移行計画（GAS 版当時の記録を含む）
 ```
 
 ## 補足
 
 - `webapp/README.md` に、D1 スキーマ、ローカルデータ移行、認証設定の詳細を記載しています。
-- GAS 版を操作・同期する必要がある場合は [CLAUDE.md](CLAUDE.md) を参照してください。
+- リポジトリ全体の開発ガイドは [CLAUDE.md](CLAUDE.md) を参照してください。

@@ -15,6 +15,10 @@ const detectionSql = readFileSync(
   fileURLToPath(new URL("../migrations/0003_csv_format_detection.sql", import.meta.url)),
   "utf8",
 );
+const splitRulePrioritySql = readFileSync(
+  fileURLToPath(new URL("../migrations/0004_split_rule_priority.sql", import.meta.url)),
+  "utf8",
+);
 
 describe("initial migration schema", () => {
   it("creates every table declared in TABLE_NAMES", () => {
@@ -75,5 +79,16 @@ describe("CSV format detection migration", () => {
       expect(detectionSql).toContain("WHERE name = '" + name + "'");
     }
     expect(detectionSql).toMatch(/expected_columns = 13,\s*header_rows = 0/);
+  });
+});
+
+describe("split rule priority migration", () => {
+  it("adds priority with the backward-compatible default and an index", () => {
+    expect(splitRulePrioritySql).toMatch(
+      /ALTER TABLE split_rules ADD COLUMN priority INTEGER NOT NULL DEFAULT 100/,
+    );
+    expect(splitRulePrioritySql).toMatch(
+      /CREATE INDEX idx_split_rules_priority ON split_rules \(priority\)/,
+    );
   });
 });

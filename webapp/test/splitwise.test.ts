@@ -7,18 +7,42 @@ import {
 } from "../src/shared/splitwise";
 import type { SplitRule } from "../src/shared/types";
 
-// Rules mirroring migrations/0002_seed.sql. Deliberately shuffled to prove that
-// sortSplitRules reproduces the data-driven evaluation order regardless of
-// input order:
+// Rules mirroring migrations/0002_seed.sql. Deliberately shuffled. All fixtures
+// use priority=100 to prove that the existing data-driven evaluation order
+// remains unchanged regardless of input order:
 //   inst-100 -> inst-50 -> kw-100 -> kw-50 -> kw-31
 // (rate DESC within each match_type; note kw-50 sorts before kw-31, which is
 // the one spot where this differs from the GAS keyword order 100 -> 31 -> 50).
 const rules: SplitRule[] = [
-  { id: 5, match_type: "institution", pattern: "イオンカード", rate: 100 },
-  { id: 2, match_type: "keyword", pattern: "割り勘", rate: 50 },
-  { id: 1, match_type: "keyword", pattern: "ﾖｺﾊﾏｼﾎｲｸﾘﾖｳ", rate: 31 },
-  { id: 4, match_type: "keyword", pattern: "全額立替", rate: 100 },
-  { id: 6, match_type: "institution", pattern: "楽天カード", rate: 50 },
+  {
+    id: 5,
+    match_type: "institution",
+    pattern: "イオンカード",
+    rate: 100,
+    priority: 100,
+  },
+  { id: 2, match_type: "keyword", pattern: "割り勘", rate: 50, priority: 100 },
+  {
+    id: 1,
+    match_type: "keyword",
+    pattern: "ﾖｺﾊﾏｼﾎｲｸﾘﾖｳ",
+    rate: 31,
+    priority: 100,
+  },
+  {
+    id: 4,
+    match_type: "keyword",
+    pattern: "全額立替",
+    rate: 100,
+    priority: 100,
+  },
+  {
+    id: 6,
+    match_type: "institution",
+    pattern: "楽天カード",
+    rate: 50,
+    priority: 100,
+  },
 ];
 
 function tx(overrides: Partial<SplitwiseTransaction>): SplitwiseTransaction {
@@ -50,6 +74,45 @@ describe("sortSplitRules", () => {
       "keyword:50", // split keywords
       "keyword:31", // special 31% keyword
     ]);
+  });
+
+  it("orders by priority before match type, rate, and id", () => {
+    const priorityRules: SplitRule[] = [
+      {
+        id: 1,
+        match_type: "institution",
+        pattern: "通常の機関",
+        rate: 100,
+        priority: 100,
+      },
+      {
+        id: 2,
+        match_type: "keyword",
+        pattern: "最優先キーワード",
+        rate: 31,
+        priority: 10,
+      },
+      {
+        id: 3,
+        match_type: "keyword",
+        pattern: "通常キーワード",
+        rate: 100,
+        priority: 100,
+      },
+    ];
+
+    expect(sortSplitRules(priorityRules).map((r) => r.id)).toEqual([2, 1, 3]);
+  });
+
+  it("uses institution, rate DESC, then id ASC when priority is tied", () => {
+    const tiedRules: SplitRule[] = [
+      { id: 5, match_type: "keyword", pattern: "同点", rate: 100, priority: 20 },
+      { id: 4, match_type: "institution", pattern: "同点", rate: 50, priority: 20 },
+      { id: 3, match_type: "institution", pattern: "同点", rate: 100, priority: 20 },
+      { id: 2, match_type: "institution", pattern: "同点", rate: 100, priority: 20 },
+    ];
+
+    expect(sortSplitRules(tiedRules).map((r) => r.id)).toEqual([2, 3, 4, 5]);
   });
 });
 
@@ -89,6 +152,37 @@ describe("matchSplitRule", () => {
 });
 
 describe("calculateSplitwise", () => {
+  it("uses 西松屋 at 50% when its priority beats another matching keyword", () => {
+    const overlapRules: SplitRule[] = [
+      {
+        id: 1,
+        match_type: "keyword",
+        pattern: "西松屋",
+        rate: 50,
+        priority: 10,
+      },
+      {
+        id: 2,
+        match_type: "keyword",
+        pattern: "ダイエー十日市場",
+        rate: 100,
+        priority: 100,
+      },
+    ];
+    const overlap = tx({
+      description: "西松屋チェーン　ダイエー十日市場店",
+      amount: 1000,
+    });
+
+    const matched = matchSplitRule(overlap, sortSplitRules(overlapRules));
+    expect(matched?.pattern).toBe("西松屋");
+    expect(matched?.rate).toBe(50);
+
+    const res = calculateSplitwise([overlap], overlapRules, 2025, 7);
+    expect(res.items[0].rate).toBe(50);
+    expect(res.totalBilled).toBe(500);
+  });
+
   it("excludes 振替 and non-支出 transactions", () => {
     const txs = [
       tx({ description: "割り勘対象", category: "食料品" }),

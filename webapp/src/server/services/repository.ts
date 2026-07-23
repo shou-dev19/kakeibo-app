@@ -121,7 +121,9 @@ export async function deleteCsvFormat(db: D1Database, id: number): Promise<void>
 
 export async function getSplitRules(db: D1Database): Promise<SplitRule[]> {
   const { results } = await db
-    .prepare("SELECT id, match_type, pattern, rate FROM split_rules ORDER BY id ASC")
+    .prepare(
+      "SELECT id, match_type, pattern, rate, priority FROM split_rules ORDER BY priority ASC, id ASC",
+    )
     .all<SplitRule>();
   return results;
 }
@@ -131,8 +133,10 @@ export async function insertSplitRule(
   r: Omit<SplitRule, "id">,
 ): Promise<number> {
   const res = await db
-    .prepare("INSERT INTO split_rules (match_type, pattern, rate) VALUES (?, ?, ?)")
-    .bind(r.match_type, r.pattern, r.rate)
+    .prepare(
+      "INSERT INTO split_rules (match_type, pattern, rate, priority) VALUES (?, ?, ?, ?)",
+    )
+    .bind(r.match_type, r.pattern, r.rate, r.priority)
     .run();
   return res.meta.last_row_id as number;
 }
@@ -143,8 +147,10 @@ export async function updateSplitRule(
   r: Omit<SplitRule, "id">,
 ): Promise<void> {
   await db
-    .prepare("UPDATE split_rules SET match_type = ?, pattern = ?, rate = ? WHERE id = ?")
-    .bind(r.match_type, r.pattern, r.rate, id)
+    .prepare(
+      "UPDATE split_rules SET match_type = ?, pattern = ?, rate = ?, priority = ? WHERE id = ?",
+    )
+    .bind(r.match_type, r.pattern, r.rate, r.priority, id)
     .run();
 }
 

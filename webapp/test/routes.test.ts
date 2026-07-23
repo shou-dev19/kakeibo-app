@@ -103,7 +103,9 @@ describe("GET /api/reports/monthly", () => {
 
 describe("GET /api/splitwise", () => {
   it("computes billed totals for the month", async () => {
-    const rules = [{ id: 1, match_type: "keyword", pattern: "スーパー", rate: 50 }];
+    const rules = [
+      { id: 1, match_type: "keyword", pattern: "スーパー", rate: 50, priority: 100 },
+    ];
     const res = await app.request("/api/splitwise?year=2025&month=7", {}, env(makeDb(txs, rules)));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { totalBilled: number };

@@ -177,6 +177,7 @@ settings.post("/split-rules", async (c) => {
     match_type: body.match_type,
     pattern: body.pattern.trim(),
     rate,
+    priority: toNullableInt(body.priority) ?? 100,
   });
   return c.json({ id }, 201);
 });
@@ -197,6 +198,7 @@ settings.patch("/split-rules/:id", async (c) => {
     match_type: body.match_type,
     pattern: body.pattern.trim(),
     rate,
+    priority: toNullableInt(body.priority) ?? 100,
   });
   return c.json({ ok: true });
 });

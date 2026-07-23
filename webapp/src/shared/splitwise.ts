@@ -8,20 +8,20 @@
 //   4. special ﾖｺﾊﾏｼﾎｲｸﾘﾖｳ keyword (部分一致, rate 31)
 //   5. split keywords              (部分一致, rate 50)
 //
-// The web version stores all of these as `split_rules` rows and reproduces the
-// ordering purely from the data by sorting:
-//   - match_type='institution' before match_type='keyword'
+// The web version stores all of these as `split_rules` rows. Users can control
+// overlap resolution with `priority` (smaller values win). Rules are sorted by:
+//   - priority ascending
+//   - within the same priority, match_type='institution' before 'keyword'
 //   - within the same match_type, rate descending
-// which yields: inst-100, inst-50, kw-100, kw-50, kw-31.
+//   - id ascending
+// Existing rules all receive priority=100 from the migration default, so their
+// evaluation order and results remain unchanged.
 //
-// NOTE: this data-driven order differs from the GAS keyword order in ONE spot.
-// The GAS version evaluates keywords as 100 → 31 (special) → 50, but sorting by
-// rate descending produces 100 → 50 → 31. This only changes the outcome for a
-// single description that matches BOTH the 31% special keyword (ﾖｺﾊﾏｼﾎｲｸﾘﾖｳ) and
-// a 50% split keyword: GAS would bill it at 31%, the sort-based order at 50%.
-// In real data these patterns never co-occur (a 保育料 description contains
-// ﾖｺﾊﾏｼﾎｲｸﾘﾖｳ but no 割り勘 keyword), so the results are identical in practice.
-// See the "differs only for a contrived overlap" test for a concrete example.
+// NOTE: when priorities are equal, this data-driven order differs from the GAS
+// keyword order in ONE spot. GAS evaluates keywords as 100 → 31 (special) → 50,
+// while the rate-descending tie-break produces 100 → 50 → 31. This preserves
+// the web app's pre-priority behavior. Users can explicitly override it by
+// assigning a smaller priority to the rule that should win.
 
 import type { SplitRule, TransactionType } from "./types";
 
@@ -75,14 +75,15 @@ export interface SplitwiseResult {
 }
 
 /**
- * Sort split rules into GAS-equivalent evaluation order:
- * institution rules before keyword rules; within each group, higher rate first.
- * `id` breaks any remaining ties for determinism.
+ * Sort split rules into evaluation order. Smaller priority values win. Within
+ * the same priority, preserve the existing tie-break order: institution rules
+ * before keyword rules, higher rate first, then lower id for determinism.
  */
 export function sortSplitRules(rules: SplitRule[]): SplitRule[] {
   const typeRank = (t: SplitRule["match_type"]) => (t === "institution" ? 0 : 1);
   return [...rules].sort(
     (a, b) =>
+      a.priority - b.priority ||
       typeRank(a.match_type) - typeRank(b.match_type) ||
       b.rate - a.rate ||
       a.id - b.id,

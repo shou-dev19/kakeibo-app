@@ -12,10 +12,20 @@ import {
 } from "../../components/ui";
 import { Field, ModalActions } from "./CategoryRulesSection";
 
-type Draft = { match_type: SplitMatchType; pattern: string; rate: string };
-const emptyDraft: Draft = { match_type: "keyword", pattern: "", rate: "50" };
+type Draft = {
+  match_type: SplitMatchType;
+  pattern: string;
+  rate: string;
+  priority: string;
+};
+const emptyDraft: Draft = {
+  match_type: "keyword",
+  pattern: "",
+  rate: "50",
+  priority: "100",
+};
 
-/** 割り勘ルール（マッチ種別 / パターン / 負担率）の一覧 + CRUD。 */
+/** 割り勘ルール（マッチ種別 / パターン / 負担率 / 優先度）の一覧 + CRUD。 */
 export function SplitRulesSection() {
   const toast = useToast();
   const rules = useAsync(() => api.getSplitRules(), []);
@@ -52,8 +62,13 @@ export function SplitRulesSection() {
                     </span>
                     {r.pattern}
                   </span>
-                  <span className="shrink-0 rounded bg-teal-50 px-1.5 py-0.5 text-xs text-teal-700">
-                    {r.rate}%
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="rounded bg-teal-50 px-1.5 py-0.5 text-xs text-teal-700">
+                      {r.rate}%
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      優先 {r.priority}
+                    </span>
                   </span>
                 </button>
               </li>
@@ -90,7 +105,12 @@ function SplitModal({
 }) {
   const [draft, setDraft] = useState<Draft>(
     rule
-      ? { match_type: rule.match_type, pattern: rule.pattern, rate: String(rule.rate) }
+      ? {
+          match_type: rule.match_type,
+          pattern: rule.pattern,
+          rate: String(rule.rate),
+          priority: String(rule.priority),
+        }
       : emptyDraft,
   );
   const [busy, setBusy] = useState(false);
@@ -110,6 +130,7 @@ function SplitModal({
       match_type: draft.match_type,
       pattern: draft.pattern.trim(),
       rate: Math.trunc(rate),
+      priority: Number(draft.priority) || 100,
     };
     try {
       if (rule) await api.updateSplitRule(rule.id, body);
@@ -164,6 +185,14 @@ function SplitModal({
             type="number"
             value={draft.rate}
             onChange={(e) => setDraft({ ...draft, rate: e.target.value })}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+          />
+        </Field>
+        <Field label="優先度（小さいほど優先）">
+          <input
+            type="number"
+            value={draft.priority}
+            onChange={(e) => setDraft({ ...draft, priority: e.target.value })}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           />
         </Field>

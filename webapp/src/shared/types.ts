@@ -62,6 +62,7 @@ export interface SplitRule {
   match_type: SplitMatchType;
   pattern: string;
   rate: number; // 負担率 (%)
+  priority: number;
 }
 
 /** 除外カテゴリ (excluded_categories) */

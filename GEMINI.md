@@ -2,76 +2,53 @@
 
 ## プロジェクト概要
 
-このプロジェクトは、Google Apps Script (GAS) を利用したサーバーレスの家計簿アプリケーションです。クレジットカードや銀行の取引明細CSVをGoogle Drive経由でインポートし、GoogleスプレッドシートをUIおよびデータベースとして使用して、家計の収支管理と可視化を行います。
+CSV 明細を取り込み、家計の収支・資産・割り勘を管理する家計簿 Web アプリです。アプリ本体は `webapp/` にあり、TypeScript のフルスタック構成（React SPA + Hono API）で Cloudflare Workers 上で動作します。
 
-- **主要技術**: Google Apps Script, Google スプレッドシート, Google Drive
-- **アーキテクチャ**: サーバーレス。ビジネスロジックはGASに集約し、UIとDBはスプレッドシートが担います。
+- **主要技術**: React / Vite, Hono on Cloudflare Workers, Cloudflare D1 (SQLite), Cloudflare Access, Vitest
 - **コア機能**:
-    - CSVインポートと自動データ整形
-    - ルールに基づく費目の自動分類
-    - 月次収支レポート、資産推移グラフの生成
+    - 金融機関ごとの CSV 形式定義による明細インポート（プレビュー・重複防止）
+    - キーワード／金融機関ルールによる取引の自動分類
+    - 月次・年間収支、資産推移・ポートフォリオ、割り勘のレポート
+    - 各種設定（分類ルール・CSV 形式・割り勘ルール・除外カテゴリ・証券残高）の管理
+
+> 旧 Google Apps Script（GAS）版は `webapp/` への移行完了に伴い削除済みです。当時の設計・移行の記録は `docs/`、データ移行スクリプトは `webapp/scripts/` に残っています。
 
 ## ビルドと実行
 
-このプロジェクトはまだ開発環境の構築が完了していません。`docs/tasks.md` に基づき、以下の手順でセットアップと開発を進めることが想定されています。
+コマンドはすべて `webapp/` で実行します。
 
-### **TODO: 開発環境のセットアップ**
+```bash
+cd webapp
+npm install
+cp .dev.vars.example .dev.vars   # 初回のみ
+npm run db:migrate:local         # ローカル D1 にマイグレーション適用
+npm run dev                      # SPA + /api/* を同一オリジンで起動
+```
 
-1.  **`clasp` のインストール**:
-    ```bash
-    npm install -g @google/clasp
-    ```
-2.  **Googleアカウントへのログイン**:
-    ```bash
-    clasp login
-    ```
-3.  **Google Cloud Platform (GCP) でのAPI有効化**:
-    - Google Drive API
-    - Google Sheets API
-    - Apps Script API
-    (上記APIを有効化し、`clasp` がアクセスできるように設定が必要です)
+| コマンド | 内容 |
+| --- | --- |
+| `npm run dev` | ローカル開発サーバー |
+| `npm run build` | 型チェック + 本番ビルド |
+| `npm test` | Vitest 実行 |
+| `npm run typecheck` | 型チェックのみ |
+| `npm run db:migrate:local` / `:remote` | D1 へマイグレーション適用（ローカル / 本番） |
+| `npm run deploy` | ビルドして Cloudflare Workers へデプロイ |
 
-4.  **プロジェクトの作成とクローン**:
-    - Googleスプレッドシートを新規作成します。
-    - `clasp` を使って、そのスプレッドシートに紐づくGASプロジェクトを作成します。
-    ```bash
-    # "standalone" は適宜 "sheets" などに変更
-    clasp create --type standalone --title "kakeibo-app"
-    ```
-    - 作成されたプロジェクトをローカルにクローン（または `pull`）します。
+ローカルでは `.dev.vars` の `DEV_BYPASS_ACCESS=true` により Cloudflare Access 検証を無効化します。本番では有効化しないこと。
 
-### **開発ワークフロー**
+## アーキテクチャと開発規約
 
-- **コードのデプロイ**:
-  ```bash
-  # ローカルの変更をGASプロジェクトにアップロード
-  clasp push
-  ```
-- **GASエディタを開く**:
-  ```bash
-  # ブラウザでGASエディタを開く
-  clasp open
-  ```
-- **コミット**:
-  - `docs/tasks.md` のタスクが完了するごとにコミットを作成します。
+```
+webapp/src/
+├── client/   # React SPA（pages / components / lib/api.ts）
+├── server/   # Hono API（routes/ → services/ → …）、Workers エントリ、Access ミドルウェア
+└── shared/   # client/server 共有の types.ts と純粋なドメインロジック
+webapp/migrations/  # D1 スキーマ・シード（NNNN_*.sql、追記のみ）
+webapp/test/        # Vitest（モジュール単位）
+```
 
-## 開発規約
-
-`docs/design.md` で定義されている以下の規約に従って開発を進めます。
-
-- **ディレクトリ構成**:
-  ```
-  .
-  ├── appsscript.json  (マニフェストファイル)
-  └── src/
-      ├── Main.gs
-      ├── Triggers/
-      ├── Services/
-      └── Repositories/
-  ```
-- **ファイル命名規則**:
-    - ロジックの役割に応じてプレフィックスを付けます (例: `Service_CsvImporter.gs`, `Repository_Spreadsheet.gs`)。
-- **リポジトリパターン**:
-    - `Repository_Spreadsheet.gs` のように、スプレッドシートへのデータアクセスを抽象化するモジュールを設けます。
-- **テスト**:
-    - `tests/` ディレクトリ配下に単体テストを実装することが計画されています。
+- **レイヤリング**: routes（HTTP）→ services（`repository.ts` が D1 アクセスを集約）→ `shared/` の純粋関数。分類・CSV 解析・割り勘・レポート等のドメインロジックは D1 非依存で `shared/` に置き、単体テスト可能にする。
+- **型の共有**: DB 行や API ペイロードの型は `shared/types.ts` に定義し client/server で共有。スキーマ変更時はマイグレーション追加 + 型更新 + `schema.test.ts` を緑に保つ。
+- **マイグレーションは追記のみ**: 適用済みファイルは編集せず、新しい `NNNN_*.sql` を追加する。
+- **優先度の慣習**: 分類ルール・割り勘ルールの `priority` は**数値が小さいほど優先**（デフォルト 100）。
+- ドメインデータ・コメントは日本語。周囲のコードスタイルに合わせる。
