@@ -23,6 +23,21 @@ function makeDb(transactions: Array<Record<string, unknown>>, splitRules: unknow
           return null;
         },
         async all<T>() {
+          if (sql.includes("SELECT category FROM category_rules")) {
+            const categories = [
+              ...new Set(
+                transactions
+                  .map((transaction) => transaction.category)
+                  .filter(
+                    (category): category is string =>
+                      typeof category === "string" && category.trim() !== "",
+                  ),
+              ),
+            ].sort();
+            return {
+              results: categories.map((category) => ({ category })) as unknown as T[],
+            };
+          }
           if (sql.includes("FROM transactions")) {
             return { results: filterTx(binds) as unknown as T[] };
           }
@@ -144,6 +159,14 @@ describe("GET /api/reports/assets", () => {
     const body = (await res.json()) as { series: unknown[]; portfolio: unknown };
     expect(Array.isArray(body.series)).toBe(true);
     expect(body.portfolio).toBeTruthy();
+  });
+});
+
+describe("GET /api/settings/categories", () => {
+  it("returns saved category names as items", async () => {
+    const res = await app.request("/api/settings/categories", {}, env(makeDb(txs)));
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ items: ["給与", "食料品"] });
   });
 });
 

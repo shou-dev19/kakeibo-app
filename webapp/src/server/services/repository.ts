@@ -12,6 +12,28 @@ import type {
   Transaction,
 } from "../../shared/types";
 
+// --- Settings: categories -------------------------------------------------
+
+/** Return every non-blank category name currently stored by the application. */
+export async function getCategories(db: D1Database): Promise<string[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT category
+       FROM (
+         SELECT category FROM category_rules
+         UNION
+         SELECT category FROM transactions
+         UNION
+         SELECT category FROM excluded_categories
+       )
+       WHERE category IS NOT NULL
+         AND TRIM(category) <> ''
+       ORDER BY category ASC`,
+    )
+    .all<{ category: string }>();
+  return results.map((row) => row.category);
+}
+
 // --- Settings: category rules ---------------------------------------------
 
 export async function getCategoryRules(db: D1Database): Promise<CategoryRule[]> {
