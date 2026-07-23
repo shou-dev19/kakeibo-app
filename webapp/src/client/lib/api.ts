@@ -321,6 +321,11 @@ export const api = {
     });
   },
 
+  // Settings: categories
+  getCategories(): Promise<{ items: string[] }> {
+    return request("/api/settings/categories");
+  },
+
   // Settings: category rules
   getCategoryRules(): Promise<{ items: CategoryRule[] }> {
     return request("/api/settings/category-rules");

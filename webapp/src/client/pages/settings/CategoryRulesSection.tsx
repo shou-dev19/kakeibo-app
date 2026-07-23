@@ -24,6 +24,7 @@ const emptyDraft: Draft = { keyword: "", institution: "", category: "", priority
 export function CategoryRulesSection() {
   const toast = useToast();
   const rules = useAsync(() => api.getCategoryRules(), []);
+  const categories = useAsync(() => api.getCategories(), []);
   const [editing, setEditing] = useState<CategoryRule | "new" | null>(null);
 
   return (
@@ -77,10 +78,12 @@ export function CategoryRulesSection() {
       {editing && (
         <RuleModal
           rule={editing === "new" ? null : editing}
+          categories={categories.data?.items ?? []}
           onClose={() => setEditing(null)}
           onDone={() => {
             setEditing(null);
             rules.reload();
+            categories.reload();
           }}
           onToast={toast}
         />
@@ -89,13 +92,15 @@ export function CategoryRulesSection() {
   );
 }
 
-function RuleModal({
+export function RuleModal({
   rule,
+  categories,
   onClose,
   onDone,
   onToast,
 }: {
   rule: CategoryRule | null;
+  categories: string[];
   onClose: () => void;
   onDone: () => void;
   onToast: { success: (m: string) => void; error: (m: string) => void };
@@ -169,11 +174,19 @@ function RuleModal({
           />
         </Field>
         <Field label="カテゴリ">
-          <input
+          <select
+            aria-label="カテゴリ"
             value={draft.category}
             onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
+            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+          >
+            <option value="">カテゴリを選択</option>
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field label="優先度（小さいほど優先）">
           <input
