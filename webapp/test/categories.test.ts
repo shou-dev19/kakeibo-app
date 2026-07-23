@@ -21,7 +21,8 @@ describe("getCategories", () => {
     expect(preparedSql).toContain("SELECT category FROM category_rules");
     expect(preparedSql).toContain("SELECT category FROM transactions");
     expect(preparedSql).toContain("SELECT category FROM excluded_categories");
-    expect(preparedSql).toMatch(/\bUNION\b/);
+    expect(preparedSql).not.toMatch(/\bUNION\s+ALL\b/);
+    expect(preparedSql.match(/\bUNION\b/g)).toHaveLength(2);
     expect(preparedSql).toMatch(/WHERE\s+category\s+IS\s+NOT\s+NULL/);
     expect(preparedSql).toMatch(/TRIM\(category\)\s*<>\s*''/);
     expect(preparedSql).toMatch(/ORDER\s+BY\s+category\s+ASC/);
