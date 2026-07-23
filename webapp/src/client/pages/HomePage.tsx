@@ -10,6 +10,7 @@ import {
 } from "../lib/format";
 import { Card, EmptyState, ErrorMessage, Page, Spinner, Stat } from "../components/ui";
 import { CategoryPie, type PieDatum } from "../components/charts";
+import { getCategoryColor } from "../lib/categoryColors";
 
 /**
  * Dashboard wrapper: resolves the latest data month before mounting the actual
@@ -90,6 +91,7 @@ function HomeContent({ ym }: { ym: YearMonth }) {
                 name: c.category,
                 value: c.amount,
               }))}
+              colorForName={getCategoryColor}
               onSliceClick={(name) =>
                 go("transactions", {
                   category: name,
