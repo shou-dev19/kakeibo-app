@@ -2,10 +2,12 @@ import { Hono } from "hono";
 import type { AppEnv } from "../types";
 import {
   deleteTransaction,
+  getSplitRules,
   listTransactions,
   updateTransactionFields,
   type TransactionFilter,
 } from "../services/repository";
+import { matchEligibleSplitRule, sortSplitRules } from "../../shared/splitwise";
 import { recategorizeAll } from "../services/recategorize";
 
 const transactions = new Hono<AppEnv>();
@@ -32,8 +34,18 @@ transactions.get("/", async (c) => {
     limit: intParam(q.limit) ?? 100,
     offset: intParam(q.offset) ?? 0,
   };
-  const page = await listTransactions(c.env.DB, filter);
-  return c.json(page);
+  const [page, rules] = await Promise.all([
+    listTransactions(c.env.DB, filter),
+    getSplitRules(c.env.DB),
+  ]);
+  const sortedRules = sortSplitRules(rules);
+  return c.json({
+    ...page,
+    items: page.items.map((tx) => ({
+      ...tx,
+      splitRate: matchEligibleSplitRule(tx, sortedRules)?.rate ?? null,
+    })),
+  });
 });
 
 /**

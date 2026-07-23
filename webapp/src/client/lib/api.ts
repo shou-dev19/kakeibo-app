@@ -30,8 +30,10 @@ export type {
 
 // --- Transactions ----------------------------------------------------------
 
+export type TransactionListItem = Transaction & { splitRate: number | null };
+
 export interface TransactionPage {
-  items: Transaction[];
+  items: TransactionListItem[];
   total: number;
   limit: number;
   offset: number;
