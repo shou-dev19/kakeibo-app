@@ -80,7 +80,9 @@ const txs = [
 describe("GET /api/transactions", () => {
   it("returns split rates using priority while preserving the filtered page total", async () => {
     const listTxs = [
-      ...txs,
+      txs[0],
+      { ...txs[1], description: "スーパー給与" },
+      txs[2],
       { id: 4, date: "2025-07-03", description: "対象外", amount: 800, type: "支出", institution: "銀行", category: "日用品", memo: null, balance: null, import_hash: "h4", created_at: "" },
       { id: 5, date: "2025-07-04", description: "スーパー振替", amount: 300, type: "支出", institution: "銀行", category: "振替", memo: null, balance: null, import_hash: "h5", created_at: "" },
     ];
@@ -101,7 +103,7 @@ describe("GET /api/transactions", () => {
     expect(body.total).toBe(4); // July only; the June transaction remains excluded.
     expect(Object.fromEntries(body.items.map((item) => [item.description, item.splitRate]))).toEqual({
       "スーパー": 50, // priority 10 wins over the matching priority 100 rule.
-      "給与": null,
+      "スーパー給与": null, // Matches the rules, but income is ineligible.
       "対象外": null,
       "スーパー振替": null,
     });
