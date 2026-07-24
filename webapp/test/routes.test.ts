@@ -125,6 +125,44 @@ describe("GET /api/transactions", () => {
   });
 });
 
+describe("POST /api/securities", () => {
+  it("accepts the ISO date emitted by a native date input", async () => {
+    const res = await app.request(
+      "/api/securities",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          date: "2025-07-12",
+          brokerage: "SBI証券",
+          value: 1_000_000,
+        }),
+      },
+      env(makeDb([])),
+    );
+
+    expect(res.status).toBe(201);
+    await expect(res.json()).resolves.toEqual({ id: 1 });
+  });
+
+  it("rejects a nonexistent ISO date", async () => {
+    const res = await app.request(
+      "/api/securities",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          date: "2025-02-30",
+          brokerage: "SBI証券",
+          value: 1_000_000,
+        }),
+      },
+      env(makeDb([])),
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({ error: "invalid date" });
+  });
+});
+
 describe("GET /api/reports/monthly", () => {
   it("aggregates income vs expense for the month", async () => {
     const res = await app.request("/api/reports/monthly?year=2025&month=7", {}, env(makeDb(txs)));

@@ -1,9 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { normalizeDate } from "../src/shared/dates";
 
-// Rule 1: normalizeDate supports YYYY/MM/DD and YYMMDD (6 digits); invalid
-// dates return null so the row is skipped.
+// Rule 1: normalizeDate supports YYYY-MM-DD, YYYY/MM/DD, and YYMMDD
+// (6 digits); invalid dates return null so the row is skipped.
 describe("normalizeDate", () => {
+  it("accepts a zero-padded ISO date", () => {
+    expect(normalizeDate("2025-07-12")).toBe("2025-07-12");
+  });
+
   it("parses YYYY/MM/DD to ISO", () => {
     expect(normalizeDate("2025/07/12")).toBe("2025-07-12");
   });
@@ -25,13 +29,14 @@ describe("normalizeDate", () => {
   });
 
   it("returns null for a non-existent calendar date (rollover rejected)", () => {
+    expect(normalizeDate("2025-02-30")).toBeNull();
     expect(normalizeDate("2025/02/30")).toBeNull();
     expect(normalizeDate("250230")).toBeNull(); // Feb 30 via YYMMDD
     expect(normalizeDate("2025/13/01")).toBeNull();
   });
 
   it("returns null for malformed strings", () => {
-    expect(normalizeDate("2025-07-12")).toBeNull(); // dashes not supported
+    expect(normalizeDate("2025-7-2")).toBeNull(); // ISO form must be zero-padded
     expect(normalizeDate("20250712")).toBeNull(); // 8 digits not 6
     expect(normalizeDate("abc")).toBeNull();
     expect(normalizeDate("12345")).toBeNull(); // 5 digits

@@ -1,7 +1,9 @@
 // Date normalization utilities. Pure functions, no runtime dependencies.
 //
 // Ported from Service_CsvImporter.gs `normalizeDate`. Supports two input
-// formats used by Japanese bank / card CSV exports:
+// formats used by Japanese bank / card CSV exports, plus the native HTML date
+// input format:
+//   - `YYYY-MM-DD` (e.g. "2025-07-12")
 //   - `YYYY/MM/DD` (e.g. "2025/07/12")
 //   - `YYMMDD`     (6 digits, e.g. "250712" => 2025-07-12)
 // Invalid dates return null so callers can skip the row.
@@ -19,6 +21,15 @@ export function normalizeDate(dateStr: string | null | undefined): string | null
   if (dateStr == null) return null;
   const s = String(dateStr).trim();
   if (s === "") return null;
+
+  // Strict, zero-padded YYYY-MM-DD form emitted by native date inputs.
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (isoMatch) {
+    const year = Number(isoMatch[1]);
+    const month = Number(isoMatch[2]);
+    const day = Number(isoMatch[3]);
+    return buildIsoDate(year, month, day);
+  }
 
   // YYYY/MM/DD (and YYYY/M/D) form.
   if (s.includes("/")) {
