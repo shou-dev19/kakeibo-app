@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api, type CategoryRule } from "../../lib/api";
-import { useAsync } from "../../hooks/useAsync";
+import { useAsync, type AsyncState } from "../../hooks/useAsync";
 import { useToast } from "../../components/Toast";
 import { Modal } from "../../components/Modal";
 import {
@@ -20,20 +20,48 @@ type Draft = {
 
 const emptyDraft: Draft = { keyword: "", institution: "", category: "", priority: "100" };
 
+type CategoriesResponse = { items: string[] };
+
+export function canManageCategoryRules(
+  state: Pick<AsyncState<CategoriesResponse>, "data" | "loading" | "error">,
+): boolean {
+  return (
+    !state.loading &&
+    state.error === null &&
+    (state.data?.items.length ?? 0) > 0
+  );
+}
+
 /** 分類ルール（キーワード / 金融機関 / カテゴリ / 優先度）の一覧 + CRUD。 */
 export function CategoryRulesSection() {
   const toast = useToast();
   const rules = useAsync(() => api.getCategoryRules(), []);
+  const categories = useAsync(() => api.getCategories(), []);
   const [editing, setEditing] = useState<CategoryRule | "new" | null>(null);
+  const canManage = canManageCategoryRules(categories);
 
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-gray-700">分類ルール</h2>
-        <Button variant="ghost" onClick={() => setEditing("new")}>
+        <Button
+          variant="ghost"
+          onClick={() => setEditing("new")}
+          disabled={!canManage}
+        >
           ＋ 追加
         </Button>
       </div>
+
+      {categories.loading ? (
+        <p role="status" className="text-xs text-gray-500">
+          カテゴリを読み込み中...
+        </p>
+      ) : categories.error ? (
+        <ErrorMessage message={categories.error} onRetry={categories.reload} />
+      ) : categories.data?.items.length === 0 ? (
+        <EmptyState message="選択できるカテゴリがありません" />
+      ) : null}
 
       {rules.loading ? (
         <Spinner />
@@ -49,7 +77,8 @@ export function CategoryRulesSection() {
                 <button
                   type="button"
                   onClick={() => setEditing(r)}
-                  className="flex w-full items-center justify-between gap-2 py-2 text-left hover:bg-gray-50"
+                  disabled={!canManage}
+                  className="flex w-full items-center justify-between gap-2 py-2 text-left hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span className="min-w-0">
                     <span className="text-sm text-gray-800">
@@ -74,13 +103,15 @@ export function CategoryRulesSection() {
         </div>
       )}
 
-      {editing && (
+      {editing && canManage && (
         <RuleModal
           rule={editing === "new" ? null : editing}
+          categories={categories.data?.items ?? []}
           onClose={() => setEditing(null)}
           onDone={() => {
             setEditing(null);
             rules.reload();
+            categories.reload();
           }}
           onToast={toast}
         />
@@ -89,13 +120,15 @@ export function CategoryRulesSection() {
   );
 }
 
-function RuleModal({
+export function RuleModal({
   rule,
+  categories,
   onClose,
   onDone,
   onToast,
 }: {
   rule: CategoryRule | null;
+  categories: string[];
   onClose: () => void;
   onDone: () => void;
   onToast: { success: (m: string) => void; error: (m: string) => void };
@@ -169,11 +202,19 @@ function RuleModal({
           />
         </Field>
         <Field label="カテゴリ">
-          <input
+          <select
+            aria-label="カテゴリ"
             value={draft.category}
             onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-          />
+            className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+          >
+            <option value="">カテゴリを選択</option>
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
         </Field>
         <Field label="優先度（小さいほど優先）">
           <input

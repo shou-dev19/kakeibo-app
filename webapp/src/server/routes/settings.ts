@@ -10,6 +10,7 @@ import {
   deleteCsvFormat,
   deleteExcludedCategory,
   deleteSplitRule,
+  getCategories,
   getCategoryRules,
   getCsvFormats,
   getExcludedCategories,
@@ -42,6 +43,13 @@ function toNullableString(v: unknown): string | null {
   const s = String(v).trim();
   return s === "" ? null : s;
 }
+
+// --- categories ------------------------------------------------------------
+
+settings.get("/categories", async (c) => {
+  const items = await getCategories(c.env.DB);
+  return c.json({ items });
+});
 
 // --- category-rules --------------------------------------------------------
 
