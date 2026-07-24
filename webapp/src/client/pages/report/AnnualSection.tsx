@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { useAsync } from "../../hooks/useAsync";
 import {
-  currentYearMonth,
   formatNumber,
   formatYen,
   formatYearMonth,
@@ -13,13 +12,23 @@ import {
 import { Card, EmptyState, ErrorMessage, Spinner } from "../../components/ui";
 import { CategoryPie, type PieDatum } from "../../components/charts";
 import { getCategoryColor } from "../../lib/categoryColors";
+import {
+  canAdvanceAnnualReportMonth,
+  clampAnnualReportMonth,
+  defaultReportMonth,
+  latestAnnualReportMonth,
+} from "../../lib/reportPeriod";
 
 /**
  * Annual report: trailing-12-month summary table + per-category monthly table
  * (horizontal scroll) + average-monthly-expense pie.
  */
 export function AnnualSection({ initial }: { initial?: YearMonth }) {
-  const [ref, setRef] = useState<YearMonth>(initial ?? currentYearMonth());
+  const maximumRef = useMemo(() => latestAnnualReportMonth(), []);
+  const [ref, setRef] = useState<YearMonth>(() =>
+    clampAnnualReportMonth(initial ?? defaultReportMonth(), maximumRef),
+  );
+  const canAdvance = canAdvanceAnnualReportMonth(ref, maximumRef);
 
   const report = useAsync(() => api.getAnnualReport(ref.year, ref.month), [
     ref.year,
@@ -49,8 +58,13 @@ export function AnnualSection({ initial }: { initial?: YearMonth }) {
         </span>
         <button
           type="button"
-          onClick={() => setRef(nextMonth(ref))}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+          onClick={() =>
+            setRef((current) =>
+              clampAnnualReportMonth(nextMonth(current), maximumRef),
+            )
+          }
+          disabled={!canAdvance}
+          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           翌月 →
         </button>

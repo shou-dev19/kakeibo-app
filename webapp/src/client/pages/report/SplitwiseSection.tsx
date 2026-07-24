@@ -2,11 +2,11 @@ import { useState } from "react";
 import { api } from "../../lib/api";
 import { useAsync } from "../../hooks/useAsync";
 import {
-  currentYearMonth,
   formatShortDate,
   formatYen,
   type YearMonth,
 } from "../../lib/format";
+import { defaultReportMonth } from "../../lib/reportPeriod";
 import { MonthSwitcher } from "../../components/MonthSwitcher";
 import {
   Card,
@@ -21,7 +21,7 @@ import {
  * subtotals, and matched line items with their applied rate.
  */
 export function SplitwiseSection({ initial }: { initial?: YearMonth }) {
-  const [ym, setYm] = useState<YearMonth>(initial ?? currentYearMonth());
+  const [ym, setYm] = useState<YearMonth>(initial ?? defaultReportMonth());
   const result = useAsync(() => api.getSplitwise(ym.year, ym.month), [
     ym.year,
     ym.month,

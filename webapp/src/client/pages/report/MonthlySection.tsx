@@ -3,7 +3,6 @@ import { api } from "../../lib/api";
 import { useAsync } from "../../hooks/useAsync";
 import { useNav } from "../../nav";
 import {
-  currentYearMonth,
   formatYen,
   formatYenSigned,
   percentOf,
@@ -19,11 +18,12 @@ import {
 } from "../../components/ui";
 import { CategoryPie, type PieDatum } from "../../components/charts";
 import { getCategoryColor } from "../../lib/categoryColors";
+import { defaultReportMonth } from "../../lib/reportPeriod";
 
 /** Monthly report: summary + category pie/list with drilldown to 明細. */
 export function MonthlySection({ initial }: { initial?: YearMonth }) {
   const { go } = useNav();
-  const [ym, setYm] = useState<YearMonth>(initial ?? currentYearMonth());
+  const [ym, setYm] = useState<YearMonth>(initial ?? defaultReportMonth());
 
   const report = useAsync(() => api.getMonthlyReport(ym.year, ym.month), [
     ym.year,

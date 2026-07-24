@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNav } from "../nav";
-import { useLatestDataMonth } from "../hooks/useLatestDataMonth";
-import { Page, Spinner } from "../components/ui";
+import { defaultReportMonth } from "../lib/reportPeriod";
+import { Page } from "../components/ui";
 import { MonthlySection } from "./report/MonthlySection";
 import { AnnualSection } from "./report/AnnualSection";
 import { AssetsSection } from "./report/AssetsSection";
@@ -22,23 +22,17 @@ export function ReportPage() {
   const initial = useMemo(() => consumeParams(), []); // eslint-disable-line react-hooks/exhaustive-deps
   const hasDrilldownMonth = initial.year != null && initial.month != null;
 
-  const { ym: latestYm, loading } = useLatestDataMonth();
-
   const [section, setSection] = useState<Section>(
     initial.reportSection ?? "monthly",
   );
 
-  // Drilldown year/month wins; otherwise seed sections from the latest data
-  // month. Passed as `initial` — sections keep their own state so user month
+  // Drilldown year/month wins; otherwise seed sections from two months ago.
+  // Passed as `initial` — sections keep their own state so user month
   // switches are never overwritten.
+  const fallbackYm = useMemo(() => defaultReportMonth(), []);
   const initialYm = hasDrilldownMonth
     ? { year: initial.year!, month: initial.month! }
-    : latestYm;
-
-  // Only the month-scoped sections need the latest-month lookup; block on it
-  // just for those (assets is month-agnostic and can render immediately).
-  const monthScoped = section === "monthly" || section === "splitwise";
-  const waiting = !hasDrilldownMonth && monthScoped && loading;
+    : fallbackYm;
 
   return (
     <Page title="レポート">
@@ -60,16 +54,10 @@ export function ReportPage() {
         ))}
       </div>
 
-      {waiting ? (
-        <Spinner />
-      ) : (
-        <>
-          {section === "monthly" && <MonthlySection initial={initialYm} />}
-          {section === "annual" && <AnnualSection initial={initialYm} />}
-          {section === "assets" && <AssetsSection />}
-          {section === "splitwise" && <SplitwiseSection initial={initialYm} />}
-        </>
-      )}
+      {section === "monthly" && <MonthlySection initial={initialYm} />}
+      {section === "annual" && <AnnualSection initial={initialYm} />}
+      {section === "assets" && <AssetsSection />}
+      {section === "splitwise" && <SplitwiseSection initial={initialYm} />}
     </Page>
   );
 }

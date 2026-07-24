@@ -47,6 +47,14 @@ export function nextMonth(ym: YearMonth): YearMonth {
   return { year: ym.year, month: ym.month + 1 };
 }
 
+/** Move a year/month by an arbitrary number of months. */
+export function shiftMonth(ym: YearMonth, offset: number): YearMonth {
+  const index = ym.year * 12 + (ym.month - 1) + offset;
+  const year = Math.floor(index / 12);
+  const month = index - year * 12 + 1;
+  return { year, month };
+}
+
 /** The current year/month in the local timezone. */
 export function currentYearMonth(now: Date = new Date()): YearMonth {
   return { year: now.getFullYear(), month: now.getMonth() + 1 };

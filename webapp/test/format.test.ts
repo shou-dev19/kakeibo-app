@@ -10,6 +10,7 @@ import {
   nextMonth,
   percentOf,
   prevMonth,
+  shiftMonth,
   yearMonthFromDate,
   yearMonthKey,
 } from "../src/client/lib/format";
@@ -62,6 +63,30 @@ describe("prevMonth / nextMonth", () => {
     const ym = { year: 2025, month: 3 };
     expect(nextMonth(prevMonth(ym))).toEqual(ym);
     expect(prevMonth(nextMonth(ym))).toEqual(ym);
+  });
+});
+
+describe("shiftMonth", () => {
+  it("moves by an arbitrary number of months", () => {
+    expect(shiftMonth({ year: 2026, month: 7 }, -2)).toEqual({
+      year: 2026,
+      month: 5,
+    });
+    expect(shiftMonth({ year: 2026, month: 7 }, 3)).toEqual({
+      year: 2026,
+      month: 10,
+    });
+  });
+
+  it("rolls across year boundaries", () => {
+    expect(shiftMonth({ year: 2026, month: 1 }, -2)).toEqual({
+      year: 2025,
+      month: 11,
+    });
+    expect(shiftMonth({ year: 2026, month: 12 }, 2)).toEqual({
+      year: 2027,
+      month: 2,
+    });
   });
 });
 
