@@ -16,6 +16,20 @@ export interface Categorizable {
   institution: string | null;
 }
 
+export function matchesCategoryRule(
+  tx: Categorizable,
+  rule: CategoryRule,
+): boolean {
+  if (
+    rule.institution != null &&
+    rule.institution !== "" &&
+    tx.institution !== rule.institution
+  ) {
+    return false;
+  }
+  return (tx.description ?? "").includes(rule.keyword);
+}
+
 /**
  * Determine the category for a single transaction.
  *
@@ -29,10 +43,7 @@ export interface Categorizable {
 export function categorizeOne(tx: Categorizable, rules: CategoryRule[]): string {
   const description = tx.description ?? "";
   for (const rule of rules) {
-    if (rule.institution != null && rule.institution !== "") {
-      if (tx.institution !== rule.institution) continue;
-    }
-    if (description.includes(rule.keyword)) {
+    if (matchesCategoryRule({ ...tx, description }, rule)) {
       return rule.category;
     }
   }

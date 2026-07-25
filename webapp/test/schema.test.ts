@@ -19,6 +19,10 @@ const splitRulePrioritySql = readFileSync(
   fileURLToPath(new URL("../migrations/0004_split_rule_priority.sql", import.meta.url)),
   "utf8",
 );
+const categoryLockSql = readFileSync(
+  fileURLToPath(new URL("../migrations/0005_transaction_category_lock.sql", import.meta.url)),
+  "utf8",
+);
 
 describe("initial migration schema", () => {
   it("creates every table declared in TABLE_NAMES", () => {
@@ -90,5 +94,14 @@ describe("split rule priority migration", () => {
     expect(splitRulePrioritySql).toMatch(
       /CREATE INDEX idx_split_rules_priority ON split_rules \(priority\)/,
     );
+  });
+});
+
+describe("transaction category lock migration", () => {
+  it("adds a non-null boolean-like lock with a backward-compatible default", () => {
+    expect(categoryLockSql).toMatch(
+      /ALTER TABLE transactions ADD COLUMN category_locked INTEGER NOT NULL DEFAULT 0/,
+    );
+    expect(categoryLockSql).toMatch(/CHECK \(category_locked IN \(0, 1\)\)/);
   });
 });

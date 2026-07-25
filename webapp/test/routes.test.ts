@@ -112,7 +112,11 @@ describe("GET /api/transactions", () => {
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
-      items: Array<{ description: string; splitRate?: number | null }>;
+      items: Array<{
+        description: string;
+        categoryLocked?: boolean;
+        splitRate?: number | null;
+      }>;
       total: number;
     };
     expect(body.total).toBe(4); // July only; the June transaction remains excluded.
@@ -121,6 +125,26 @@ describe("GET /api/transactions", () => {
       "スーパー給与": null, // Matches the rules, but income is ineligible.
       "対象外": null,
       "スーパー振替": null,
+    });
+    expect(body.items.every((item) => item.categoryLocked === false)).toBe(true);
+  });
+});
+
+describe("PATCH /api/transactions/:id", () => {
+  it("rejects a malformed category change before writing", async () => {
+    const res = await app.request(
+      "/api/transactions/1",
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          categoryChange: { mode: "rule", category: "食料品" },
+        }),
+      },
+      env(makeDb(txs)),
+    );
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "カテゴリ変更の指定が不正です",
     });
   });
 });

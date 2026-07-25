@@ -11,6 +11,7 @@ import {
 export interface RecategorizeResult {
   updated: number;
   total: number;
+  skippedLocked: number;
 }
 
 /**
@@ -25,7 +26,12 @@ export async function recategorizeAll(db: D1Database): Promise<RecategorizeResul
   const sorted = sortRules(rules);
 
   let updated = 0;
+  let skippedLocked = 0;
   for (const tx of txs) {
+    if (tx.category_locked === 1) {
+      skippedLocked += 1;
+      continue;
+    }
     const next = categorizeOne(
       { description: tx.description, institution: tx.institution },
       sorted,
@@ -35,5 +41,5 @@ export async function recategorizeAll(db: D1Database): Promise<RecategorizeResul
       updated += 1;
     }
   }
-  return { updated, total: txs.length };
+  return { updated, total: txs.length, skippedLocked };
 }

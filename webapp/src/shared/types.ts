@@ -18,6 +18,7 @@ export interface Transaction {
   type: TransactionType;
   institution: string | null;
   category: string | null;
+  category_locked: number; // 0: 自動分類 / 1: 手動固定
   memo: string | null;
   balance: number | null; // 円
   import_hash: string;

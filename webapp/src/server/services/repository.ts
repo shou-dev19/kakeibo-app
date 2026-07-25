@@ -312,7 +312,7 @@ export async function listTransactions(
 
   const { results } = await db
     .prepare(
-      `SELECT id, date, description, amount, type, institution, category, memo, balance, import_hash, created_at
+      `SELECT id, date, description, amount, type, institution, category, category_locked, memo, balance, import_hash, created_at
        FROM transactions ${clause}
        ORDER BY date DESC, id DESC
        LIMIT ? OFFSET ?`,
@@ -327,7 +327,7 @@ export async function listTransactions(
 export async function getAllTransactions(db: D1Database): Promise<Transaction[]> {
   const { results } = await db
     .prepare(
-      "SELECT id, date, description, amount, type, institution, category, memo, balance, import_hash, created_at FROM transactions ORDER BY date ASC, id ASC",
+      "SELECT id, date, description, amount, type, institution, category, category_locked, memo, balance, import_hash, created_at FROM transactions ORDER BY date ASC, id ASC",
     )
     .all<Transaction>();
   return results;
@@ -340,7 +340,7 @@ export async function getTransactionsForMonth(
 ): Promise<Transaction[]> {
   const { results } = await db
     .prepare(
-      `SELECT id, date, description, amount, type, institution, category, memo, balance, import_hash, created_at
+      `SELECT id, date, description, amount, type, institution, category, category_locked, memo, balance, import_hash, created_at
        FROM transactions WHERE date LIKE ? ORDER BY date ASC, id ASC`,
     )
     .bind(`${year}-${String(month).padStart(2, "0")}-%`)
@@ -348,16 +348,54 @@ export async function getTransactionsForMonth(
   return results;
 }
 
+export async function getTransactionById(
+  db: D1Database,
+  id: number,
+): Promise<Transaction | null> {
+  return db
+    .prepare(
+      `SELECT id, date, description, amount, type, institution, category, category_locked, memo, balance, import_hash, created_at
+       FROM transactions WHERE id = ?`,
+    )
+    .bind(id)
+    .first<Transaction>();
+}
+
+export async function countTransactionsMatchingCategoryRule(
+  db: D1Database,
+  keyword: string,
+  institution: string | null,
+): Promise<number> {
+  const institutionClause = institution == null ? "" : " AND institution = ?";
+  const binds = institution == null ? [keyword] : [keyword, institution];
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS count FROM transactions
+       WHERE instr(description, ?) > 0${institutionClause}`,
+    )
+    .bind(...binds)
+    .first<{ count: number }>();
+  return row?.count ?? 0;
+}
+
 export async function updateTransactionFields(
   db: D1Database,
   id: number,
-  fields: { category?: string | null; memo?: string | null },
+  fields: {
+    category?: string | null;
+    category_locked?: number;
+    memo?: string | null;
+  },
 ): Promise<void> {
   const sets: string[] = [];
   const binds: unknown[] = [];
   if (Object.prototype.hasOwnProperty.call(fields, "category")) {
     sets.push("category = ?");
     binds.push(fields.category ?? null);
+  }
+  if (Object.prototype.hasOwnProperty.call(fields, "category_locked")) {
+    sets.push("category_locked = ?");
+    binds.push(fields.category_locked ?? 0);
   }
   if (Object.prototype.hasOwnProperty.call(fields, "memo")) {
     sets.push("memo = ?");

@@ -30,7 +30,28 @@ export type {
 
 // --- Transactions ----------------------------------------------------------
 
-export type TransactionListItem = Transaction & { splitRate: number | null };
+export type TransactionListItem = Omit<Transaction, "category_locked"> & {
+  categoryLocked: boolean;
+  splitRate: number | null;
+};
+
+export interface CategoryRulePreview {
+  matchCount: number;
+  currentRule: CategoryRule | null;
+  conflictingRules: CategoryRule[];
+  reusableRuleId: number | null;
+  priority: number;
+}
+
+export type CategoryChange =
+  | {
+      mode: "rule";
+      category: string;
+      keyword: string;
+      institution: string | null;
+    }
+  | { mode: "fixed"; category: string }
+  | { mode: "unlock" };
 
 export interface TransactionPage {
   items: TransactionListItem[];
@@ -171,6 +192,7 @@ export interface ImportFilePayload {
 export interface RecategorizeResult {
   updated: number;
   total: number;
+  skippedLocked: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -257,11 +279,28 @@ export const api = {
   },
   updateTransaction(
     id: number,
-    fields: { category?: string | null; memo?: string | null },
+    fields: {
+      category?: string | null;
+      memo?: string | null;
+      categoryChange?: CategoryChange;
+    },
   ): Promise<{ ok: true }> {
     return request(`/api/transactions/${id}`, {
       method: "PATCH",
       body: JSON.stringify(fields),
+    });
+  },
+  previewTransactionCategoryRule(
+    id: number,
+    body: {
+      category: string;
+      keyword: string;
+      institution: string | null;
+    },
+  ): Promise<CategoryRulePreview> {
+    return request(`/api/transactions/${id}/category-rule-preview`, {
+      method: "POST",
+      body: JSON.stringify(body),
     });
   },
   deleteTransaction(id: number): Promise<{ ok: true }> {

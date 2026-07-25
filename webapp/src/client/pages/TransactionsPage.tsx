@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type Transaction } from "../lib/api";
+import {
+  api,
+  type CategoryRulePreview,
+  type TransactionListItem,
+} from "../lib/api";
 import { useAsync } from "../hooks/useAsync";
 import { useLatestDataMonth } from "../hooks/useLatestDataMonth";
 import { useNav } from "../nav";
@@ -98,22 +102,23 @@ function TransactionsContent({
     [ym.year, ym.month, category, institution, keyword, page],
   );
 
-  // Distinct categories/institutions for the filter dropdowns come from the
-  // category rules + current page's rows (lightweight, no extra endpoint).
-  const rulesQuery = useAsync(() => api.getCategoryRules(), []);
+  const categoriesQuery = useAsync(() => api.getCategories(), []);
   const knownCategories = useMemo(() => {
     const set = new Set<string>();
-    for (const r of rulesQuery.data?.items ?? []) set.add(r.category);
+    for (const categoryName of categoriesQuery.data?.items ?? []) {
+      set.add(categoryName);
+    }
     for (const t of query.data?.items ?? []) if (t.category) set.add(t.category);
+    set.add("未分類");
     return [...set].sort();
-  }, [rulesQuery.data, query.data]);
+  }, [categoriesQuery.data, query.data]);
   const knownInstitutions = useMemo(() => {
     const set = new Set<string>();
     for (const t of query.data?.items ?? []) if (t.institution) set.add(t.institution);
     return [...set].sort();
   }, [query.data]);
 
-  const [editing, setEditing] = useState<Transaction | null>(null);
+  const [editing, setEditing] = useState<TransactionListItem | null>(null);
 
   const total = query.data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -235,6 +240,11 @@ function TransactionsContent({
                               相手負担 {tx.splitRate}%
                             </span>
                           )}
+                          {tx.categoryLocked && (
+                            <span className="rounded bg-amber-50 px-1.5 py-0.5 text-amber-700">
+                              手動固定
+                            </span>
+                          )}
                           {tx.memo && <span className="text-gray-400">📝{tx.memo}</span>}
                         </p>
                       </div>
@@ -282,6 +292,9 @@ function TransactionsContent({
         <EditTransactionModal
           tx={editing}
           categories={knownCategories}
+          categoriesLoading={categoriesQuery.loading}
+          categoriesError={categoriesQuery.error}
+          onRetryCategories={categoriesQuery.reload}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -300,32 +313,120 @@ function TransactionsContent({
   );
 }
 
-function EditTransactionModal({
+export function EditTransactionModal({
   tx,
   categories,
+  categoriesLoading = false,
+  categoriesError = null,
+  onRetryCategories = () => undefined,
   onClose,
   onSaved,
   onDeleted,
   onError,
 }: {
-  tx: Transaction;
+  tx: TransactionListItem;
   categories: string[];
+  categoriesLoading?: boolean;
+  categoriesError?: string | null;
+  onRetryCategories?: () => void;
   onClose: () => void;
   onSaved: () => void;
   onDeleted: () => void;
   onError: (message: string) => void;
 }) {
-  const [category, setCategory] = useState(tx.category ?? "");
+  const originalCategory = tx.category?.trim() || "未分類";
+  const [category, setCategory] = useState(originalCategory);
   const [memo, setMemo] = useState(tx.memo ?? "");
+  const [addRule, setAddRule] = useState(true);
+  const [ruleKeyword, setRuleKeyword] = useState(tx.description);
+  const [limitInstitution, setLimitInstitution] = useState(
+    tx.institution != null && tx.institution !== "",
+  );
+  const [preview, setPreview] = useState<CategoryRulePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewRetry, setPreviewRetry] = useState(0);
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const categoryChanged = category !== originalCategory;
+  const previewInstitution =
+    limitInstitution && tx.institution ? tx.institution : null;
+  const ruleInputValid =
+    ruleKeyword.trim() !== "" &&
+    tx.description.includes(ruleKeyword.trim());
+  const needsPreview = categoryChanged && addRule && ruleInputValid;
+
+  useEffect(() => {
+    if (!needsPreview || categoriesLoading || categoriesError) {
+      setPreview(null);
+      setPreviewLoading(false);
+      setPreviewError(null);
+      return;
+    }
+
+    let active = true;
+    setPreview(null);
+    setPreviewLoading(true);
+    setPreviewError(null);
+    const timer = window.setTimeout(() => {
+      void api
+        .previewTransactionCategoryRule(tx.id, {
+          category,
+          keyword: ruleKeyword.trim(),
+          institution: previewInstitution,
+        })
+        .then((result) => {
+          if (active) setPreview(result);
+        })
+        .catch((error) => {
+          if (active) {
+            setPreviewError(
+              error instanceof Error ? error.message : "影響確認に失敗しました",
+            );
+          }
+        })
+        .finally(() => {
+          if (active) setPreviewLoading(false);
+        });
+    }, 350);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [
+    addRule,
+    categoriesError,
+    categoriesLoading,
+    category,
+    needsPreview,
+    previewInstitution,
+    previewRetry,
+    ruleKeyword,
+    tx.id,
+  ]);
 
   const save = async () => {
     setBusy(true);
     try {
       await api.updateTransaction(tx.id, {
-        category: category.trim() === "" ? null : category.trim(),
         memo: memo.trim() === "" ? null : memo.trim(),
+        ...(categoryChanged
+          ? {
+              categoryChange: addRule
+                ? {
+                    mode: "rule" as const,
+                    category,
+                    keyword: ruleKeyword.trim(),
+                    institution: previewInstitution,
+                  }
+                : {
+                    mode: "fixed" as const,
+                    category,
+                  },
+            }
+          : {}),
       });
       onSaved();
     } catch (e) {
@@ -347,6 +448,28 @@ function EditTransactionModal({
     }
   };
 
+  const unlock = async () => {
+    setBusy(true);
+    try {
+      await api.updateTransaction(tx.id, {
+        memo: memo.trim() === "" ? null : memo.trim(),
+        categoryChange: { mode: "unlock" },
+      });
+      onSaved();
+    } catch (e) {
+      onError(e instanceof Error ? e.message : "固定解除に失敗しました");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveDisabled =
+    busy ||
+    (categoryChanged &&
+      (categoriesLoading ||
+        categoriesError !== null ||
+        (addRule && (!ruleInputValid || previewLoading || preview == null))));
+
   return (
     <Modal title="取引を編集" onClose={onClose}>
       <div className="mb-4 rounded-lg bg-gray-50 p-3 text-sm">
@@ -355,23 +478,133 @@ function EditTransactionModal({
           {tx.date} ・ {tx.type} ・ {formatYen(tx.amount)}
           {tx.institution ? ` ・ ${tx.institution}` : ""}
         </p>
+        {tx.categoryLocked && (
+          <span className="mt-2 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">
+            手動固定
+          </span>
+        )}
       </div>
 
       <label className="mb-1 block text-xs font-medium text-gray-600">
         カテゴリ
       </label>
-      <input
-        list="tx-categories"
+      <select
+        aria-label="カテゴリ"
         value={category}
         onChange={(e) => setCategory(e.target.value)}
-        placeholder="未分類"
-        className="mb-3 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-      />
-      <datalist id="tx-categories">
+        disabled={categoriesLoading || categoriesError !== null}
+        className="mb-3 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+      >
         {categories.map((c) => (
-          <option key={c} value={c} />
+          <option key={c} value={c}>
+            {c}
+          </option>
         ))}
-      </datalist>
+      </select>
+
+      {categoriesLoading && (
+        <p className="mb-3 text-xs text-gray-500">カテゴリを読み込み中...</p>
+      )}
+      {categoriesError && (
+        <div className="mb-3">
+          <ErrorMessage
+            message={categoriesError}
+            onRetry={onRetryCategories}
+          />
+        </div>
+      )}
+
+      {categoryChanged && (
+        <div className="mb-4 rounded-lg border border-teal-100 bg-teal-50/50 p-3">
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={addRule}
+              onChange={(e) => setAddRule(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>分類ルールを追加して今後の類似明細にも適用</span>
+          </label>
+
+          {addRule ? (
+            <div className="mt-3 flex flex-col gap-3">
+              <label className="text-xs font-medium text-gray-600">
+                適用キーワード
+                <input
+                  value={ruleKeyword}
+                  onChange={(e) => setRuleKeyword(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                />
+              </label>
+              {!ruleInputValid && (
+                <p className="text-xs text-rose-600">
+                  この取引の説明に含まれるキーワードを入力してください。
+                </p>
+              )}
+              {tx.institution && (
+                <label className="flex items-center gap-2 text-xs text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={limitInstitution}
+                    onChange={(e) => setLimitInstitution(e.target.checked)}
+                  />
+                  この金融機関（{tx.institution}）に限定
+                </label>
+              )}
+
+              {previewLoading && (
+                <p role="status" className="text-xs text-gray-500">
+                  影響を確認中...
+                </p>
+              )}
+              {previewError && (
+                <div className="rounded border border-rose-200 bg-white p-2">
+                  <p className="text-xs text-rose-700">{previewError}</p>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewRetry((value) => value + 1)}
+                    className="mt-1 text-xs text-teal-700 underline"
+                  >
+                    再試行
+                  </button>
+                </div>
+              )}
+              {preview && (
+                <div className="rounded border border-teal-200 bg-white p-2 text-xs text-gray-600">
+                  <p>この条件に一致する既存明細: {preview.matchCount}件</p>
+                  {preview.reusableRuleId != null && (
+                    <p className="mt-1 text-teal-700">
+                      同じ有効な分類ルールを再利用します。
+                    </p>
+                  )}
+                  {preview.conflictingRules.length > 0 && (
+                    <div className="mt-1 text-amber-700">
+                      <p>競合する既存ルール:</p>
+                      <ul className="list-inside list-disc">
+                        {preview.conflictingRules.map((rule) => (
+                          <li key={rule.id}>
+                            {rule.keyword}
+                            {rule.institution ? ` @${rule.institution}` : ""}
+                            {" → "}
+                            {rule.category}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <p className="mt-2">
+                    保存時に変更するのはこの明細のみです。ほかの既存明細には再分類時に反映されます。
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-amber-700">
+              この明細のカテゴリを固定します。全明細を再分類しても変更されません。
+            </p>
+          )}
+        </div>
+      )}
 
       <label className="mb-1 block text-xs font-medium text-gray-600">メモ</label>
       <input
@@ -379,6 +612,17 @@ function EditTransactionModal({
         onChange={(e) => setMemo(e.target.value)}
         className="mb-4 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
       />
+
+      {tx.categoryLocked && !categoryChanged && (
+        <button
+          type="button"
+          onClick={unlock}
+          disabled={busy}
+          className="mb-4 text-xs text-teal-700 underline disabled:opacity-50"
+        >
+          固定を解除して分類ルールに戻す
+        </button>
+      )}
 
       <div className="flex items-center justify-between">
         <Button variant="danger" onClick={() => setConfirmDelete(true)} disabled={busy}>
@@ -388,7 +632,7 @@ function EditTransactionModal({
           <Button variant="secondary" onClick={onClose} disabled={busy}>
             キャンセル
           </Button>
-          <Button onClick={save} disabled={busy}>
+          <Button onClick={save} disabled={saveDisabled}>
             {busy ? "保存中..." : "保存"}
           </Button>
         </div>

@@ -20,7 +20,7 @@ export function SettingsPage() {
     try {
       const res = await api.recategorizeAll();
       toast.success(
-        `再分類完了: ${res.total}件中 ${res.updated}件を更新しました`,
+        `再分類完了: ${res.total}件中 ${res.updated}件を更新、手動固定 ${res.skippedLocked}件をスキップしました`,
       );
       setConfirming(false);
     } catch (e) {
@@ -40,7 +40,7 @@ export function SettingsPage() {
         <div>
           <h2 className="text-sm font-semibold text-gray-700">全件再分類</h2>
           <p className="text-xs text-gray-500">
-            現在の分類ルールを全取引に再適用します。
+            現在の分類ルールを、手動固定されていない全取引に再適用します。
           </p>
         </div>
         <Button onClick={() => setConfirming(true)}>実行</Button>
@@ -68,7 +68,7 @@ export function SettingsPage() {
       {confirming && (
         <ConfirmDialog
           title="全件再分類"
-          message="全ての取引に現在の分類ルールを再適用します。よろしいですか？"
+          message="手動固定されていない全ての取引に、現在の分類ルールを再適用します。よろしいですか？"
           confirmLabel="再分類する"
           busy={busy}
           onConfirm={recategorize}
