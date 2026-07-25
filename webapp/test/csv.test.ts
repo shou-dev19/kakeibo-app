@@ -109,6 +109,25 @@ describe("parseCsv", () => {
     expect(out[0].balance).toBeNull();
   });
 
+  // Rule 5: マイナス金額は符号反転して逆の種別へ。
+  it("treats a negative expense as income (キャッシュバック・返金)", () => {
+    const csv = ["h", "2025/07/01,ＭｙＪＣＢ　Ｐａｙポイント利用（キャッシュバック）,-1648,,0"].join("\n");
+    const out = parseCsv(csv, fmt());
+    expect(out[0]).toMatchObject({ amount: 1648, type: "収入" });
+  });
+
+  it("treats a negative income as expense", () => {
+    const csv = ["h", "2025/07/01,取消,,-500,0"].join("\n");
+    const out = parseCsv(csv, fmt());
+    expect(out[0]).toMatchObject({ amount: 500, type: "支出" });
+  });
+
+  it("keeps a negative balance as-is", () => {
+    const csv = ["h", "2025/07/01,x,100,,-2000"].join("\n");
+    const out = parseCsv(csv, fmt());
+    expect(out[0]).toMatchObject({ amount: 100, type: "支出", balance: -2000 });
+  });
+
   it("respects header_rows", () => {
     const csv = ["meta", "日付,内容,支出", "2025/07/01,x,100"].join("\n");
     const out = parseCsv(csv, fmt({ header_rows: 2, income_col: null, balance_col: null }));

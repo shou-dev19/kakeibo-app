@@ -122,6 +122,10 @@ export function parseAmount(cell: string | undefined): number {
  *      integer, it's 収入. Otherwise check expense_col; a non-zero integer is
  *      支出. If neither yields a valid non-zero amount, skip the row.
  *   4. balance_col is optional; a valid integer sets balance, else null.
+ *
+ * GAS版からの変更点:
+ *   5. 金額がマイナスの行は符号を反転して種別を逆にする（支出のマイナス=返金・
+ *      キャッシュバックは収入として扱う）。
  */
 export function parseCsv(text: string, format: CsvFormat): ParsedTransaction[] {
   if (!text || !format) return [];
@@ -165,6 +169,15 @@ export function parseCsv(text: string, format: CsvFormat): ParsedTransaction[] {
     }
 
     if (type === "") continue; // no valid amount -> skip
+
+    // マイナス金額は符号を反転して逆の種別に振り替える。
+    // 例: JCBの「ＭｙＪＣＢ　Ｐａｙポイント利用（キャッシュバック）」はご利用金額
+    // 列がマイナス表記だが、これは請求からの控除＝実質的な収入なので、収入として
+    // プラス計上する（返金・取消行も同様）。
+    if (amount < 0) {
+      amount = -amount;
+      type = type === "支出" ? "収入" : "支出";
+    }
 
     // Optional balance column.
     let balance: number | null = null;
