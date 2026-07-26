@@ -103,6 +103,10 @@ function TransactionsContent({
   );
 
   const categoriesQuery = useAsync(() => api.getCategories(), []);
+  const institutionsQuery = useAsync(
+    () => api.getTransactionInstitutions(ym.year, ym.month),
+    [ym.year, ym.month],
+  );
   const knownCategories = useMemo(() => {
     const set = new Set<string>();
     for (const categoryName of categoriesQuery.data?.items ?? []) {
@@ -112,11 +116,7 @@ function TransactionsContent({
     set.add("未分類");
     return [...set].sort();
   }, [categoriesQuery.data, query.data]);
-  const knownInstitutions = useMemo(() => {
-    const set = new Set<string>();
-    for (const t of query.data?.items ?? []) if (t.institution) set.add(t.institution);
-    return [...set].sort();
-  }, [query.data]);
+  const knownInstitutions = institutionsQuery.data?.items ?? [];
 
   const [editing, setEditing] = useState<TransactionListItem | null>(null);
 
@@ -133,7 +133,13 @@ function TransactionsContent({
 
   return (
     <Page title="明細">
-      <MonthSwitcher value={ym} onChange={setYm} />
+      <MonthSwitcher
+        value={ym}
+        onChange={(nextYm) => {
+          setYm(nextYm);
+          setInstitution("");
+        }}
+      />
 
       {/* Filters */}
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
@@ -181,6 +187,13 @@ function TransactionsContent({
           </Button>
         </form>
       </div>
+
+      {institutionsQuery.error && (
+        <ErrorMessage
+          message={institutionsQuery.error}
+          onRetry={institutionsQuery.reload}
+        />
+      )}
 
       {hasFilters && (
         <button

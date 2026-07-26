@@ -3,6 +3,7 @@ import type { AppEnv } from "../types";
 import {
   deleteTransaction,
   getSplitRules,
+  getTransactionInstitutionsForMonth,
   listTransactions,
   updateTransactionFields,
   type TransactionFilter,
@@ -56,6 +57,28 @@ transactions.get("/", async (c) => {
       };
     }),
   });
+});
+
+/**
+ * GET /api/transactions/institutions?year=&month=
+ * Returns every institution that has a transaction in the specified month.
+ */
+transactions.get("/institutions", async (c) => {
+  const year = intParam(c.req.query("year"));
+  const month = intParam(c.req.query("month"));
+  if (
+    year == null ||
+    month == null ||
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    year < 1 ||
+    month < 1 ||
+    month > 12
+  ) {
+    return c.json({ error: "year and month (1-12) are required" }, 400);
+  }
+  const items = await getTransactionInstitutionsForMonth(c.env.DB, year, month);
+  return c.json({ items });
 });
 
 /**

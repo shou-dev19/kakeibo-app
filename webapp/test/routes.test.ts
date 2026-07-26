@@ -23,6 +23,21 @@ function makeDb(transactions: Array<Record<string, unknown>>, splitRules: unknow
           return null;
         },
         async all<T>() {
+          if (sql.includes("SELECT DISTINCT institution")) {
+            const institutions = [
+              ...new Set(
+                filterTx(binds)
+                  .map((transaction) => transaction.institution)
+                  .filter(
+                    (institution): institution is string =>
+                      typeof institution === "string" && institution.trim() !== "",
+                  ),
+              ),
+            ].sort();
+            return {
+              results: institutions.map((institution) => ({ institution })) as unknown as T[],
+            };
+          }
           if (sql.includes("SELECT category FROM category_rules")) {
             const categories = [
               ...new Set(
@@ -127,6 +142,36 @@ describe("GET /api/transactions", () => {
       "スーパー振替": null,
     });
     expect(body.items.every((item) => item.categoryLocked === false)).toBe(true);
+  });
+});
+
+describe("GET /api/transactions/institutions", () => {
+  it("returns every distinct institution in the selected month, ordered by name", async () => {
+    const res = await app.request(
+      "/api/transactions/institutions?year=2025&month=7",
+      {},
+      env(makeDb([
+        ...txs,
+        { ...txs[0], id: 4, institution: "カード" },
+        { ...txs[0], id: 5, institution: "カード" },
+        { ...txs[0], id: 6, institution: "" },
+      ])),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ items: ["カード", "銀行"] });
+  });
+
+  it("rejects a missing or invalid year/month", async () => {
+    for (const path of [
+      "/api/transactions/institutions",
+      "/api/transactions/institutions?year=2025&month=13",
+      "/api/transactions/institutions?year=0&month=7",
+      "/api/transactions/institutions?year=2025.5&month=7",
+    ]) {
+      const res = await app.request(path, {}, env(makeDb(txs)));
+      expect(res.status).toBe(400);
+    }
   });
 });
 

@@ -264,6 +264,26 @@ export interface TransactionPage {
   offset: number;
 }
 
+/** Return every non-blank institution with transactions in the specified month. */
+export async function getTransactionInstitutionsForMonth(
+  db: D1Database,
+  year: number,
+  month: number,
+): Promise<string[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT DISTINCT institution
+       FROM transactions
+       WHERE date LIKE ?
+         AND institution IS NOT NULL
+         AND TRIM(institution) <> ''
+       ORDER BY institution ASC`,
+    )
+    .bind(`${year}-${String(month).padStart(2, "0")}-%`)
+    .all<{ institution: string }>();
+  return results.map((row) => row.institution);
+}
+
 /** Build the shared WHERE clause + bindings for transaction queries. */
 function buildTransactionWhere(filter: TransactionFilter): {
   clause: string;

@@ -277,6 +277,12 @@ export const api = {
       }),
     });
   },
+  getTransactionInstitutions(
+    year: number,
+    month: number,
+  ): Promise<{ items: string[] }> {
+    return request("/api/transactions/institutions", { query: { year, month } });
+  },
   updateTransaction(
     id: number,
     fields: {
