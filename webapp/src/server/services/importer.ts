@@ -2,7 +2,7 @@
 // parse -> categorize -> hash) to the D1 repository. Each input file is handled
 // independently so one file's failure never affects the others.
 
-import type { CategoryRule, CsvFormat } from "../../shared/types";
+import type { CategoryRule, CsvFormat, Owner } from "../../shared/types";
 import { parseCsv, type ParsedTransaction } from "../../shared/csv";
 import { categorizeMany } from "../../shared/categorize";
 import { assignImportHashes } from "../../shared/hash";
@@ -180,20 +180,27 @@ async function processFile(
   }
 }
 
-/** Preview multiple files without writing anything. */
+/**
+ * Preview multiple files without writing anything.
+ *
+ * `owner` comes from the login, never from the request body: the person
+ * uploading is by definition the person the rows belong to. Classification uses
+ * that user's own rules, and duplicate detection is scoped to their own rows.
+ */
 export async function previewImports(
   db: D1Database,
+  owner: Owner,
   files: ImportFileInput[],
 ): Promise<ImportPreviewFile[]> {
   const formats = await getCsvFormats(db);
-  const rules = await getCategoryRules(db);
+  const rules = await getCategoryRules(db, owner);
 
   // Duplicate detection mirrors the real import: a row is a duplicate if its
-  // import_hash already exists in the DB, or was already seen in an earlier
-  // file within this same preview request. Because per-file occurrence indices
-  // start at 0, a re-uploaded identical file produces the exact hashes already
-  // stored and is reported as fully duplicate.
-  const existingHashes = await getExistingImportHashes(db);
+  // import_hash already exists in the DB for this owner, or was already seen in
+  // an earlier file within this same preview request. Because per-file
+  // occurrence indices start at 0, a re-uploaded identical file produces the
+  // exact hashes already stored and is reported as fully duplicate.
+  const existingHashes = await getExistingImportHashes(db, owner);
   const seen = new Set<string>(existingHashes);
 
   const out: ImportPreviewFile[] = [];
@@ -242,10 +249,11 @@ export async function previewImports(
 /** Import multiple files, each in isolation. Returns per-file results. */
 export async function runImports(
   db: D1Database,
+  owner: Owner,
   files: ImportFileInput[],
 ): Promise<ImportResultFile[]> {
   const formats = await getCsvFormats(db);
-  const rules = await getCategoryRules(db);
+  const rules = await getCategoryRules(db, owner);
 
   const out: ImportResultFile[] = [];
   for (const file of files) {
@@ -267,6 +275,7 @@ export async function runImports(
     try {
       for (const tx of hashed) {
         const ok = await insertTransactionIgnoreDup(db, {
+          owner,
           date: tx.date,
           description: tx.description,
           amount: tx.amount,

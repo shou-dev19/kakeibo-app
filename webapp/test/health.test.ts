@@ -28,6 +28,7 @@ function makeEnv(tableCount: number): Bindings {
     ACCESS_TEAM_DOMAIN: "test.cloudflareaccess.com",
     ACCESS_AUD: "test-aud",
     ALLOWED_EMAILS: "husband@example.com,wife@example.com",
+    OWNER_EMAILS: "husband:husband@example.com,wife:wife@example.com",
   };
 }
 

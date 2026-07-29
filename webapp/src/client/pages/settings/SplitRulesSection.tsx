@@ -11,6 +11,7 @@ import {
   Spinner,
 } from "../../components/ui";
 import { Field, ModalActions } from "./CategoryRulesSection";
+import { SharedBadge } from "../../components/SharedBadge";
 
 type Draft = {
   match_type: SplitMatchType;
@@ -34,7 +35,10 @@ export function SplitRulesSection() {
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700">割り勘ルール</h2>
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+          割り勘ルール
+          <SharedBadge />
+        </h2>
         <Button variant="ghost" onClick={() => setEditing("new")}>
           ＋ 追加
         </Button>
@@ -64,7 +68,7 @@ export function SplitRulesSection() {
                   </span>
                   <span className="flex shrink-0 items-center gap-2">
                     <span className="rounded bg-teal-50 px-1.5 py-0.5 text-xs text-teal-700">
-                      {r.rate}%
+                      妻 {r.rate}%
                     </span>
                     <span className="text-xs text-gray-400">
                       優先 {r.priority}
@@ -122,7 +126,7 @@ function SplitModal({
     }
     const rate = Number(draft.rate);
     if (!Number.isFinite(rate)) {
-      onToast.error("負担率は数値で入力してください");
+      onToast.error("妻の負担率は数値で入力してください");
       return;
     }
     setBusy(true);
@@ -180,13 +184,17 @@ function SplitModal({
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           />
         </Field>
-        <Field label="負担率（%）">
+        {/* rate は支払者によらず「妻の負担率」。夫負担は 100 - rate。 */}
+        <Field label="妻の負担率（%）">
           <input
             type="number"
             value={draft.rate}
             onChange={(e) => setDraft({ ...draft, rate: e.target.value })}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
           />
+          <span className="mt-1 block text-xs text-gray-500">
+            残り（100 - 妻の負担率）が夫の負担になります。支払者が誰かは影響しません。
+          </span>
         </Field>
         <Field label="優先度（小さいほど優先）">
           <input

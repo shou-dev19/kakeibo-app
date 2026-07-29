@@ -1,4 +1,9 @@
-import type { CategoryRule, Transaction } from "../../shared/types";
+import {
+  OWNER_LABELS,
+  type CategoryRule,
+  type Owner,
+  type Transaction,
+} from "../../shared/types";
 import {
   UNCATEGORIZED,
   categorizeOne,
@@ -39,7 +44,7 @@ export interface TransactionEditInput {
 export class TransactionEditError extends Error {
   constructor(
     message: string,
-    readonly status: 400 | 404 = 400,
+    readonly status: 400 | 403 | 404 = 400,
   ) {
     super(message);
     this.name = "TransactionEditError";
@@ -54,12 +59,28 @@ function normalizeRuleInput(input: CategoryRuleInput): CategoryRuleInput {
   };
 }
 
-async function requireTransaction(
+/**
+ * Fetch a transaction and assert it belongs to the acting user.
+ *
+ * The list screen can show both users' transactions, but editing is owner-only.
+ * Otherwise "分類ルールは自分のものだけ" would leak: saving a category change on
+ * the partner's transaction would either grow the partner's rule set or add a
+ * rule that never applies to the row that triggered it. Read-only is the one
+ * behaviour that stays predictable.
+ */
+async function requireOwnTransaction(
   db: D1Database,
   id: number,
+  owner: Owner,
 ): Promise<Transaction> {
   const tx = await getTransactionById(db, id);
   if (!tx) throw new TransactionEditError("取引が見つかりません", 404);
+  if (tx.owner !== owner) {
+    throw new TransactionEditError(
+      `${OWNER_LABELS[tx.owner]}の明細のため編集できません`,
+      403,
+    );
+  }
   return tx;
 }
 
@@ -79,12 +100,13 @@ async function validateCategory(
 export async function previewTransactionCategoryRule(
   db: D1Database,
   id: number,
+  owner: Owner,
   rawInput: CategoryRuleInput,
 ): Promise<CategoryRulePreview> {
   const input = normalizeRuleInput(rawInput);
   const [tx, rules] = await Promise.all([
-    requireTransaction(db, id),
-    getCategoryRules(db),
+    requireOwnTransaction(db, id, owner),
+    getCategoryRules(db, owner),
   ]);
   await validateCategory(db, input.category);
 
@@ -118,6 +140,7 @@ export async function previewTransactionCategoryRule(
       : 100;
   const matchCount = await countTransactionsMatchingCategoryRule(
     db,
+    owner,
     input.keyword,
     input.institution,
   );
@@ -164,9 +187,10 @@ function transactionUpdateStatement(
 export async function saveTransactionEdit(
   db: D1Database,
   id: number,
+  owner: Owner,
   input: TransactionEditInput,
 ): Promise<void> {
-  const tx = await requireTransaction(db, id);
+  const tx = await requireOwnTransaction(db, id, owner);
   const change = input.categoryChange;
 
   if (!change) {
@@ -191,7 +215,7 @@ export async function saveTransactionEdit(
   }
 
   if (change.mode === "unlock") {
-    const rules = await getCategoryRules(db);
+    const rules = await getCategoryRules(db, owner);
     const category = categorizeOne(tx, sortRules(rules));
     await transactionUpdateStatement(db, id, {
       category,
@@ -204,15 +228,17 @@ export async function saveTransactionEdit(
   }
 
   const normalized = normalizeRuleInput(change);
-  const preview = await previewTransactionCategoryRule(db, id, normalized);
+  const preview = await previewTransactionCategoryRule(db, id, owner, normalized);
   const statements: D1PreparedStatement[] = [];
   if (preview.reusableRuleId == null) {
+    // 新しいルールは常にログイン利用者に紐づく。
     statements.push(
       db
         .prepare(
-          "INSERT INTO category_rules (keyword, institution, category, priority) VALUES (?, ?, ?, ?)",
+          "INSERT INTO category_rules (owner, keyword, institution, category, priority) VALUES (?, ?, ?, ?, ?)",
         )
         .bind(
+          owner,
           normalized.keyword,
           normalized.institution,
           normalized.category,

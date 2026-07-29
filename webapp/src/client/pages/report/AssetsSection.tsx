@@ -17,12 +17,20 @@ import {
   type LineDatum,
   type PieDatum,
 } from "../../components/charts";
+import { OwnerBadge } from "../../components/OwnerTabs";
+import { useMe } from "../../hooks/useMe";
+import { OWNER_LABELS, type OwnerScope } from "../../../shared/types";
 
 /** Assets: total-asset trend line + portfolio pie + securities CRUD. */
-export function AssetsSection() {
+export function AssetsSection({
+  ownerScope = "all",
+}: {
+  ownerScope?: OwnerScope;
+}) {
   const toast = useToast();
-  const assets = useAsync(() => api.getAssets(), []);
-  const securities = useAsync(() => api.getSecurities(), []);
+  const me = useMe();
+  const assets = useAsync(() => api.getAssets(ownerScope), [ownerScope]);
+  const securities = useAsync(() => api.getSecurities(ownerScope), [ownerScope]);
 
   const trend = useMemo<LineDatum[]>(() => {
     const series = assets.data?.series ?? [];
@@ -57,6 +65,20 @@ export function AssetsSection() {
             <Stat label="預金・現金" value={formatYen(assets.data.portfolio.bankTotal)} />
             <Stat label="証券" value={formatYen(assets.data.portfolio.securitiesTotal)} />
           </div>
+          {/* 合算表示のときだけ、誰の分がいくらかを添える。 */}
+          {ownerScope === "all" && assets.data.portfolio.byOwner.length > 1 && (
+            <ul className="mt-3 flex flex-col gap-1 border-t border-gray-100 pt-2 text-xs text-gray-500">
+              {assets.data.portfolio.byOwner.map((row) => (
+                <li key={row.owner} className="flex items-center justify-between gap-2">
+                  <span>{OWNER_LABELS[row.owner]}</span>
+                  <span className="tabular-nums">
+                    預金 {formatYen(row.bankTotal)} ／ 証券{" "}
+                    {formatYen(row.securitiesTotal)} ／ 計 {formatYen(row.total)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
       ) : null}
 
@@ -113,32 +135,38 @@ export function AssetsSection() {
                       <p className="text-sm font-medium text-gray-800">
                         {s.brokerage}
                       </p>
-                      <p className="text-xs text-gray-500">
-                        {formatShortDate(s.date)}（{s.date.slice(0, 4)}）
+                      <p className="flex flex-wrap items-center gap-x-2 text-xs text-gray-500">
+                        <span>
+                          {formatShortDate(s.date)}（{s.date.slice(0, 4)}）
+                        </span>
+                        {ownerScope === "all" && <OwnerBadge owner={s.owner} />}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-medium tabular-nums text-gray-800">
                         {formatYen(s.value)}
                       </span>
-                      <button
-                        type="button"
-                        aria-label="削除"
-                        onClick={async () => {
-                          try {
-                            await api.deleteSecurity(s.id);
-                            toast.success("削除しました");
-                            reloadAll();
-                          } catch (e) {
-                            toast.error(
-                              e instanceof Error ? e.message : "削除に失敗しました",
-                            );
-                          }
-                        }}
-                        className="text-rose-500 hover:text-rose-700"
-                      >
-                        🗑
-                      </button>
+                      {/* 自分が登録した残高だけ削除できる。 */}
+                      {me?.owner === s.owner && (
+                        <button
+                          type="button"
+                          aria-label="削除"
+                          onClick={async () => {
+                            try {
+                              await api.deleteSecurity(s.id);
+                              toast.success("削除しました");
+                              reloadAll();
+                            } catch (e) {
+                              toast.error(
+                                e instanceof Error ? e.message : "削除に失敗しました",
+                              );
+                            }
+                          }}
+                          className="text-rose-500 hover:text-rose-700"
+                        >
+                          🗑
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}

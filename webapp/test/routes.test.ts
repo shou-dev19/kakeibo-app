@@ -82,6 +82,10 @@ function makeDb(transactions: Array<Record<string, unknown>>, splitRules: unknow
           const prefix = like.slice(0, -1);
           out = out.filter((t) => String(t.date).startsWith(prefix));
         }
+        // Owner scoping: 'all' binds nothing, so the presence of an owner bind
+        // is exactly the single-user case.
+        const owner = binds.find((b) => b === "husband" || b === "wife");
+        if (owner) out = out.filter((t) => t.owner === owner);
         return out;
       }
 
@@ -98,13 +102,14 @@ function env(db: D1Database): Bindings {
     ACCESS_TEAM_DOMAIN: "t",
     ACCESS_AUD: "a",
     ALLOWED_EMAILS: "x@example.com",
+    OWNER_EMAILS: "husband:x@example.com",
   };
 }
 
 const txs = [
-  { id: 1, date: "2025-07-01", description: "スーパー", amount: 1000, type: "支出", institution: "銀行", category: "食料品", memo: null, balance: null, import_hash: "h1", created_at: "" },
-  { id: 2, date: "2025-07-02", description: "給与", amount: 300000, type: "収入", institution: "銀行", category: "給与", memo: null, balance: null, import_hash: "h2", created_at: "" },
-  { id: 3, date: "2025-06-15", description: "先月", amount: 500, type: "支出", institution: "銀行", category: "食料品", memo: null, balance: null, import_hash: "h3", created_at: "" },
+  { id: 1, owner: "husband", date: "2025-07-01", description: "スーパー", amount: 1000, type: "支出", institution: "銀行", category: "食料品", memo: null, balance: null, import_hash: "h1", created_at: "" },
+  { id: 2, owner: "husband", date: "2025-07-02", description: "給与", amount: 300000, type: "収入", institution: "銀行", category: "給与", memo: null, balance: null, import_hash: "h2", created_at: "" },
+  { id: 3, owner: "husband", date: "2025-06-15", description: "先月", amount: 500, type: "支出", institution: "銀行", category: "食料品", memo: null, balance: null, import_hash: "h3", created_at: "" },
 ];
 
 describe("GET /api/transactions", () => {
@@ -142,6 +147,97 @@ describe("GET /api/transactions", () => {
       "スーパー振替": null,
     });
     expect(body.items.every((item) => item.categoryLocked === false)).toBe(true);
+  });
+});
+
+// Read screens take an owner scope from the query. Writes never do — those are
+// covered by the service-level tests, which assert the owner comes from login.
+describe("owner read scope", () => {
+  const mixed = [
+    { ...txs[0], id: 1, owner: "husband", amount: 1000 },
+    { ...txs[0], id: 2, owner: "wife", amount: 4000, institution: "妻の銀行" },
+  ];
+
+  it.each([
+    ["husband", 1, 1000],
+    ["wife", 1, 4000],
+    ["all", 2, 5000],
+  ])("scopes the transaction list to owner=%s", async (owner, count) => {
+    const res = await app.request(
+      `/api/transactions?year=2025&month=7&owner=${owner}`,
+      {},
+      env(makeDb(mixed)),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: unknown[]; total: number };
+    expect(body.total).toBe(count);
+    expect(body.items).toHaveLength(count);
+  });
+
+  it("defaults to the combined view when owner is omitted", async () => {
+    const res = await app.request(
+      "/api/transactions?year=2025&month=7",
+      {},
+      env(makeDb(mixed)),
+    );
+    const body = (await res.json()) as { total: number };
+    expect(body.total).toBe(2);
+  });
+
+  it("includes the owner on each returned transaction", async () => {
+    const res = await app.request(
+      "/api/transactions?year=2025&month=7",
+      {},
+      env(makeDb(mixed)),
+    );
+    const body = (await res.json()) as { items: Array<{ owner: string }> };
+    expect(body.items.map((item) => item.owner).sort()).toEqual([
+      "husband",
+      "wife",
+    ]);
+  });
+
+  it("scopes the monthly report", async () => {
+    const res = await app.request(
+      "/api/reports/monthly?year=2025&month=7&owner=wife",
+      {},
+      env(makeDb(mixed)),
+    );
+    const body = (await res.json()) as { totalExpense: number };
+    expect(body.totalExpense).toBe(4000);
+  });
+
+  it("scopes the institution options", async () => {
+    const res = await app.request(
+      "/api/transactions/institutions?year=2025&month=7&owner=wife",
+      {},
+      env(makeDb(mixed)),
+    );
+    await expect(res.json()).resolves.toEqual({ items: ["妻の銀行"] });
+  });
+
+  it.each([
+    "/api/transactions?owner=nobody",
+    "/api/transactions/institutions?year=2025&month=7&owner=nobody",
+    "/api/reports/monthly?year=2025&month=7&owner=nobody",
+    "/api/reports/annual?year=2025&month=7&owner=nobody",
+    "/api/reports/assets?owner=nobody",
+    "/api/securities?owner=nobody",
+  ])("rejects an unknown owner value on %s", async (path) => {
+    const res = await app.request(path, {}, env(makeDb(mixed)));
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("GET /api/me", () => {
+  it("reports the logged-in user", async () => {
+    const res = await app.request("/api/me", {}, env(makeDb([])));
+    expect(res.status).toBe(200);
+    // The test env runs with the Access bypass, which defaults to the husband.
+    await expect(res.json()).resolves.toEqual({
+      owner: "husband",
+      label: "夫",
+    });
   });
 });
 
@@ -248,14 +344,35 @@ describe("GET /api/reports/monthly", () => {
 });
 
 describe("GET /api/splitwise", () => {
-  it("computes billed totals for the month", async () => {
-    const rules = [
-      { id: 1, match_type: "keyword", pattern: "スーパー", rate: 50, priority: 100 },
-    ];
+  const rules = [
+    { id: 1, match_type: "keyword", pattern: "スーパー", rate: 50, priority: 100 },
+  ];
+
+  it("splits the month's eligible expenses into the two shares", async () => {
     const res = await app.request("/api/splitwise?year=2025&month=7", {}, env(makeDb(txs, rules)));
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { totalBilled: number };
-    expect(body.totalBilled).toBe(500); // 1000 * 50%
+    const body = (await res.json()) as {
+      totalAmount: number;
+      husbandShare: number;
+      wifeShare: number;
+    };
+    expect(body.totalAmount).toBe(1000);
+    expect(body.wifeShare).toBe(500); // 1000 * 50%
+    expect(body.husbandShare).toBe(500);
+  });
+
+  it("ignores an owner query: the split is always household-wide", async () => {
+    const both = [
+      txs[0],
+      { ...txs[0], id: 9, owner: "wife", description: "スーパー妻" },
+    ];
+    const res = await app.request(
+      "/api/splitwise?year=2025&month=7&owner=husband",
+      {},
+      env(makeDb(both, rules)),
+    );
+    const body = (await res.json()) as { totalAmount: number };
+    expect(body.totalAmount).toBe(2000);
   });
 });
 

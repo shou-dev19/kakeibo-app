@@ -23,6 +23,7 @@ import {
   updateCsvFormat,
   updateSplitRule,
 } from "../services/repository";
+import { requireOwner } from "../services/owner";
 
 const settings = new Hono<AppEnv>();
 
@@ -46,15 +47,23 @@ function toNullableString(v: unknown): string | null {
 
 // --- categories ------------------------------------------------------------
 
+// Deliberately not owner-scoped: category names are a shared vocabulary even
+// though the rules that assign them are per-user (see repository.getCategories).
 settings.get("/categories", async (c) => {
   const items = await getCategories(c.env.DB);
   return c.json({ items });
 });
 
 // --- category-rules --------------------------------------------------------
+//
+// Per-user. The owner always comes from the login: the settings screen shows
+// your rules and edits your rules, and there is no way to address the other
+// user's rules over the API at all.
+
+const RULE_NOT_FOUND = "分類ルールが見つかりません";
 
 settings.get("/category-rules", async (c) => {
-  const items = await getCategoryRules(c.env.DB);
+  const items = await getCategoryRules(c.env.DB, requireOwner(c));
   return c.json({ items });
 });
 
@@ -67,6 +76,7 @@ settings.post("/category-rules", async (c) => {
     return c.json({ error: "category is required" }, 400);
   }
   const id = await insertCategoryRule(c.env.DB, {
+    owner: requireOwner(c),
     keyword: body.keyword.trim(),
     institution: toNullableString(body.institution),
     category: body.category.trim(),
@@ -82,19 +92,21 @@ settings.patch("/category-rules/:id", async (c) => {
   if (!body || typeof body.keyword !== "string" || typeof body.category !== "string") {
     return c.json({ error: "keyword and category are required" }, 400);
   }
-  await updateCategoryRule(c.env.DB, id, {
+  const updated = await updateCategoryRule(c.env.DB, id, requireOwner(c), {
     keyword: body.keyword.trim(),
     institution: toNullableString(body.institution),
     category: body.category.trim(),
     priority: toNullableInt(body.priority) ?? 100,
   });
+  if (!updated) return c.json({ error: RULE_NOT_FOUND }, 404);
   return c.json({ ok: true });
 });
 
 settings.delete("/category-rules/:id", async (c) => {
   const id = intParam(c.req.param("id"));
   if (id == null) return c.json({ error: "invalid id" }, 400);
-  await deleteCategoryRule(c.env.DB, id);
+  const deleted = await deleteCategoryRule(c.env.DB, id, requireOwner(c));
+  if (!deleted) return c.json({ error: RULE_NOT_FOUND }, 404);
   return c.json({ ok: true });
 });
 

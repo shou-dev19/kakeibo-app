@@ -6,6 +6,7 @@ import {
   insertSecurity,
 } from "../services/repository";
 import { normalizeDate } from "../../shared/dates";
+import { parseOwnerScope, requireOwner } from "../services/owner";
 
 const securities = new Hono<AppEnv>();
 
@@ -15,9 +16,11 @@ function intParam(v: string | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-/** GET /api/securities — list all securities balance entries. */
+/** GET /api/securities?owner= — list securities balance entries in scope. */
 securities.get("/", async (c) => {
-  const items = await getSecurities(c.env.DB);
+  const scope = parseOwnerScope(c.req.query("owner"));
+  if (scope == null) return c.json({ error: "invalid owner" }, 400);
+  const items = await getSecurities(c.env.DB, scope);
   return c.json({ items });
 });
 
@@ -45,7 +48,9 @@ securities.post("/", async (c) => {
     return c.json({ error: "value must be a number" }, 400);
   }
 
+  // 登録者本人の資産として記録する (クライアントからは指定できない)。
   const id = await insertSecurity(c.env.DB, {
+    owner: requireOwner(c),
     date,
     brokerage: body.brokerage.trim(),
     value: Math.round(body.value),
@@ -53,11 +58,12 @@ securities.post("/", async (c) => {
   return c.json({ id }, 201);
 });
 
-/** DELETE /api/securities/:id */
+/** DELETE /api/securities/:id — 自分の登録分のみ削除できる。 */
 securities.delete("/:id", async (c) => {
   const id = intParam(c.req.param("id"));
   if (id == null) return c.json({ error: "invalid id" }, 400);
-  await deleteSecurity(c.env.DB, id);
+  const deleted = await deleteSecurity(c.env.DB, id, requireOwner(c));
+  if (!deleted) return c.json({ error: "この残高は削除できません" }, 403);
   return c.json({ ok: true });
 });
 

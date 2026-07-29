@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { TABLE_NAMES } from "../src/shared/types";
+import { INITIAL_TABLE_NAMES, TABLE_NAMES } from "../src/shared/types";
 
 const initialSql = readFileSync(
   fileURLToPath(new URL("../migrations/0001_initial.sql", import.meta.url)),
@@ -23,13 +23,47 @@ const categoryLockSql = readFileSync(
   fileURLToPath(new URL("../migrations/0005_transaction_category_lock.sql", import.meta.url)),
   "utf8",
 );
+const transactionsOwnerSql = readFileSync(
+  fileURLToPath(new URL("../migrations/0007_transactions_owner.sql", import.meta.url)),
+  "utf8",
+);
+const securitiesOwnerSql = readFileSync(
+  fileURLToPath(new URL("../migrations/0008_securities_owner.sql", import.meta.url)),
+  "utf8",
+);
+const categoryRulesOwnerSql = readFileSync(
+  fileURLToPath(new URL("../migrations/0009_category_rules_owner.sql", import.meta.url)),
+  "utf8",
+);
+const recategorizeHistorySql = readFileSync(
+  fileURLToPath(new URL("../migrations/0010_recategorize_history.sql", import.meta.url)),
+  "utf8",
+);
+
+/** Every table in TABLE_NAMES must be created by *some* migration. */
+const allMigrationSql = [
+  initialSql,
+  detectionSql,
+  splitRulePrioritySql,
+  categoryLockSql,
+  transactionsOwnerSql,
+  securitiesOwnerSql,
+  categoryRulesOwnerSql,
+  recategorizeHistorySql,
+].join("\n");
 
 describe("initial migration schema", () => {
-  it("creates every table declared in TABLE_NAMES", () => {
-    for (const table of TABLE_NAMES) {
+  it("creates every table declared in INITIAL_TABLE_NAMES", () => {
+    for (const table of INITIAL_TABLE_NAMES) {
       expect(initialSql).toMatch(
         new RegExp(`CREATE TABLE ${table}\\b`),
       );
+    }
+  });
+
+  it("creates every table declared in TABLE_NAMES across all migrations", () => {
+    for (const table of TABLE_NAMES) {
+      expect(allMigrationSql).toMatch(new RegExp(`CREATE TABLE ${table}\\b`));
     }
   });
 
@@ -103,5 +137,87 @@ describe("transaction category lock migration", () => {
       /ALTER TABLE transactions ADD COLUMN category_locked INTEGER NOT NULL DEFAULT 0/,
     );
     expect(categoryLockSql).toMatch(/CHECK \(category_locked IN \(0, 1\)\)/);
+  });
+});
+
+describe("transactions owner migration", () => {
+  it("scopes the dedupe constraint to the owner instead of the hash alone", () => {
+    expect(transactionsOwnerSql).toMatch(/UNIQUE \(owner, import_hash\)/);
+    // The bare UNIQUE on import_hash must be gone, or two users could never
+    // hold the same transaction.
+    expect(transactionsOwnerSql).not.toMatch(/import_hash\s+TEXT\s+NOT NULL UNIQUE/);
+  });
+
+  it("constrains owner to the two known users", () => {
+    expect(transactionsOwnerSql).toMatch(
+      /owner\s+TEXT\s+NOT NULL CHECK \(owner IN \('husband', 'wife'\)\)/,
+    );
+  });
+
+  it("backfills every existing row as the husband's and preserves ids", () => {
+    expect(transactionsOwnerSql).toMatch(
+      /SELECT\s+id, 'husband', date, description, amount, type/,
+    );
+  });
+
+  it("carries every column of the old table into the new one", () => {
+    for (const column of [
+      "id", "date", "description", "amount", "type", "institution",
+      "category", "category_locked", "memo", "balance", "import_hash",
+      "created_at",
+    ]) {
+      expect(transactionsOwnerSql).toContain(column);
+    }
+  });
+
+  it("recreates the indexes dropped along with the old table", () => {
+    expect(transactionsOwnerSql).toMatch(
+      /CREATE INDEX idx_transactions_date ON transactions \(date\)/,
+    );
+    expect(transactionsOwnerSql).toMatch(
+      /CREATE INDEX idx_transactions_category ON transactions \(category\)/,
+    );
+    expect(transactionsOwnerSql).toMatch(
+      /CREATE INDEX idx_transactions_owner_date ON transactions \(owner, date\)/,
+    );
+  });
+});
+
+describe("securities owner migration", () => {
+  it("adds owner with a backward-compatible default", () => {
+    expect(securitiesOwnerSql).toMatch(
+      /ALTER TABLE securities_balances ADD COLUMN owner TEXT NOT NULL DEFAULT 'husband'/,
+    );
+  });
+});
+
+describe("category rules owner migration", () => {
+  it("adds owner with a backward-compatible default", () => {
+    expect(categoryRulesOwnerSql).toMatch(
+      /ALTER TABLE category_rules ADD COLUMN owner TEXT NOT NULL DEFAULT 'husband'/,
+    );
+  });
+
+  it("seeds the wife's rules as a copy of the husband's", () => {
+    expect(categoryRulesOwnerSql).toMatch(
+      /INSERT INTO category_rules \(owner, keyword, institution, category, priority\)\s*SELECT 'wife', keyword, institution, category, priority\s*FROM category_rules\s*WHERE owner = 'husband'/,
+    );
+  });
+});
+
+describe("recategorize history migration", () => {
+  it("records each run with its owner and revert state", () => {
+    expect(recategorizeHistorySql).toMatch(
+      /owner\s+TEXT\s+NOT NULL CHECK \(owner IN \('husband', 'wife'\)\)/,
+    );
+    expect(recategorizeHistorySql).toMatch(/reverted_at\s+TEXT/);
+  });
+
+  it("stores the previous category per changed transaction so a run can be undone", () => {
+    expect(recategorizeHistorySql).toMatch(/previous_category TEXT/);
+    expect(recategorizeHistorySql).toMatch(/new_category\s+TEXT\s+NOT NULL/);
+    expect(recategorizeHistorySql).toMatch(
+      /run_id\s+INTEGER NOT NULL REFERENCES recategorize_runs \(id\) ON DELETE CASCADE/,
+    );
   });
 });

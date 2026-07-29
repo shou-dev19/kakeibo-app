@@ -19,16 +19,23 @@ import {
 import { CategoryPie, type PieDatum } from "../../components/charts";
 import { getCategoryColor } from "../../lib/categoryColors";
 import { defaultReportMonth } from "../../lib/reportPeriod";
+import type { OwnerScope } from "../../../shared/types";
 
 /** Monthly report: summary + category pie/list with drilldown to 明細. */
-export function MonthlySection({ initial }: { initial?: YearMonth }) {
+export function MonthlySection({
+  initial,
+  ownerScope = "all",
+}: {
+  initial?: YearMonth;
+  ownerScope?: OwnerScope;
+}) {
   const { go } = useNav();
   const [ym, setYm] = useState<YearMonth>(initial ?? defaultReportMonth());
 
-  const report = useAsync(() => api.getMonthlyReport(ym.year, ym.month), [
-    ym.year,
-    ym.month,
-  ]);
+  const report = useAsync(
+    () => api.getMonthlyReport(ym.year, ym.month, ownerScope),
+    [ym.year, ym.month, ownerScope],
+  );
 
   return (
     <div className="flex flex-col gap-4">

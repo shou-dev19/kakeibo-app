@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type { AppEnv } from "./types";
 import { accessAuth } from "./middleware/access";
-import type { HealthResponse } from "../shared/types";
+import { OWNER_LABELS, type HealthResponse, type MeResponse } from "../shared/types";
+import { requireOwner } from "./services/owner";
 import importsRoutes from "./routes/imports";
 import transactionsRoutes from "./routes/transactions";
 import reportsRoutes from "./routes/reports";
@@ -27,6 +28,17 @@ api.get("/health", async (c) => {
 
   const tables = results[0]?.count ?? 0;
   const body: HealthResponse = { status: "ok", tables };
+  return c.json(body);
+});
+
+/**
+ * GET /api/me
+ * The logged-in user. The SPA uses this to label the screen ("夫としてログイン中")
+ * and to decide which transactions it may edit.
+ */
+api.get("/me", (c) => {
+  const owner = requireOwner(c);
+  const body: MeResponse = { owner, label: OWNER_LABELS[owner] };
   return c.json(body);
 });
 

@@ -18,22 +18,29 @@ import {
   defaultReportMonth,
   latestAnnualReportMonth,
 } from "../../lib/reportPeriod";
+import type { OwnerScope } from "../../../shared/types";
 
 /**
  * Annual report: trailing-12-month summary table + per-category monthly table
  * (horizontal scroll) + average-monthly-expense pie.
  */
-export function AnnualSection({ initial }: { initial?: YearMonth }) {
+export function AnnualSection({
+  initial,
+  ownerScope = "all",
+}: {
+  initial?: YearMonth;
+  ownerScope?: OwnerScope;
+}) {
   const maximumRef = useMemo(() => latestAnnualReportMonth(), []);
   const [ref, setRef] = useState<YearMonth>(() =>
     clampAnnualReportMonth(initial ?? defaultReportMonth(), maximumRef),
   );
   const canAdvance = canAdvanceAnnualReportMonth(ref, maximumRef);
 
-  const report = useAsync(() => api.getAnnualReport(ref.year, ref.month), [
-    ref.year,
-    ref.month,
-  ]);
+  const report = useAsync(
+    () => api.getAnnualReport(ref.year, ref.month, ownerScope),
+    [ref.year, ref.month, ownerScope],
+  );
 
   const avgPie = useMemo<PieDatum[]>(() => {
     if (!report.data) return [];

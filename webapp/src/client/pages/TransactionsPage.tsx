@@ -13,8 +13,11 @@ import {
   formatYen,
   type YearMonth,
 } from "../lib/format";
+import { OWNER_LABELS } from "../../shared/types";
 import { getCategoryColor } from "../lib/categoryColors";
 import { MonthSwitcher } from "../components/MonthSwitcher";
+import { OwnerBadge, OwnerTabs, useOwnerScope } from "../components/OwnerTabs";
+import { useMe } from "../hooks/useMe";
 import { Modal } from "../components/Modal";
 import {
   Button,
@@ -75,7 +78,9 @@ function TransactionsContent({
   initialInstitution: string;
 }) {
   const toast = useToast();
+  const me = useMe();
 
+  const [ownerScope, setOwnerScope] = useOwnerScope();
   const [ym, setYm] = useState<YearMonth>(initialYm);
   const [category, setCategory] = useState(initialCategory);
   const [institution, setInstitution] = useState(initialInstitution);
@@ -86,11 +91,12 @@ function TransactionsContent({
   // Reset to first page whenever filters change.
   useEffect(() => {
     setPage(0);
-  }, [ym.year, ym.month, category, institution, keyword]);
+  }, [ownerScope, ym.year, ym.month, category, institution, keyword]);
 
   const query = useAsync(
     () =>
       api.getTransactions({
+        owner: ownerScope,
         year: ym.year,
         month: ym.month,
         category: category || undefined,
@@ -99,13 +105,13 @@ function TransactionsContent({
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
       }),
-    [ym.year, ym.month, category, institution, keyword, page],
+    [ownerScope, ym.year, ym.month, category, institution, keyword, page],
   );
 
   const categoriesQuery = useAsync(() => api.getCategories(), []);
   const institutionsQuery = useAsync(
-    () => api.getTransactionInstitutions(ym.year, ym.month),
-    [ym.year, ym.month],
+    () => api.getTransactionInstitutions(ym.year, ym.month, ownerScope),
+    [ym.year, ym.month, ownerScope],
   );
   const knownCategories = useMemo(() => {
     const set = new Set<string>();
@@ -133,6 +139,15 @@ function TransactionsContent({
 
   return (
     <Page title="明細">
+      <OwnerTabs
+        value={ownerScope}
+        onChange={(next) => {
+          setOwnerScope(next);
+          // The other user banks elsewhere, so the current pick may not exist.
+          setInstitution("");
+        }}
+      />
+
       <MonthSwitcher
         value={ym}
         onChange={(nextYm) => {
@@ -222,12 +237,23 @@ function TransactionsContent({
             {query.data?.items.map((tx) => {
               const categoryName = tx.category?.trim() || "未分類";
               const categoryColor = getCategoryColor(categoryName);
+              // Editing is owner-only (see the server's transactionCategoryEdit):
+              // a category change here can create a classification rule, and
+              // rules always belong to the person making the change.
+              const editable = me != null && tx.owner === me.owner;
 
               return (
                 <li key={tx.id}>
                   <Card
                     className="!p-3"
-                    onClick={() => setEditing(tx)}
+                    onClick={
+                      editable
+                        ? () => setEditing(tx)
+                        : () =>
+                            toast.error(
+                              `${OWNER_LABELS[tx.owner]}の明細のため編集できません`,
+                            )
+                    }
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -236,6 +262,7 @@ function TransactionsContent({
                         </p>
                         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
                           <span>{formatShortDate(tx.date)}</span>
+                          {ownerScope === "all" && <OwnerBadge owner={tx.owner} />}
                           {tx.institution && <span>{tx.institution}</span>}
                           <span
                             className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-gray-700"
@@ -250,7 +277,7 @@ function TransactionsContent({
                           </span>
                           {tx.splitRate !== null && (
                             <span className="rounded bg-indigo-50 px-1.5 py-0.5 text-indigo-700">
-                              相手負担 {tx.splitRate}%
+                              妻負担 {tx.splitRate}%
                             </span>
                           )}
                           {tx.categoryLocked && (

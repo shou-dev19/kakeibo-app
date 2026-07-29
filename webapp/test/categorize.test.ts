@@ -5,9 +5,9 @@ import type { CategoryRule } from "../src/shared/types";
 // Seeded rules mirroring migrations/0002_seed.sql, including the generalized
 // イオンカード×十日市場→食料品 (priority 0) special case.
 const rules: CategoryRule[] = [
-  { id: 1, keyword: "十日市場", institution: "イオンカード", category: "食料品", priority: 0 },
-  { id: 2, keyword: "楽天", institution: null, category: "固定費", priority: 100 },
-  { id: 3, keyword: "Amazon", institution: null, category: "変動費", priority: 100 },
+  { id: 1, owner: "husband", keyword: "十日市場", institution: "イオンカード", category: "食料品", priority: 0 },
+  { id: 2, owner: "husband", keyword: "楽天", institution: null, category: "固定費", priority: 100 },
+  { id: 3, owner: "husband", keyword: "Amazon", institution: null, category: "変動費", priority: 100 },
 ];
 
 // Rule 3: priority ascending; keyword substring; institution exact-match when
@@ -47,8 +47,8 @@ describe("categorizeOne", () => {
 
   it("honors priority order: a lower-priority rule wins even if a later rule also matches", () => {
     const ordered: CategoryRule[] = [
-      { id: 10, keyword: "スーパー", institution: null, category: "食料品", priority: 5 },
-      { id: 11, keyword: "スーパー", institution: null, category: "その他", priority: 50 },
+      { id: 10, owner: "husband", keyword: "スーパー", institution: null, category: "食料品", priority: 5 },
+      { id: 11, owner: "husband", keyword: "スーパー", institution: null, category: "その他", priority: 50 },
     ];
     expect(
       categorizeOne({ description: "スーパーX", institution: null }, ordered),
@@ -57,8 +57,8 @@ describe("categorizeOne", () => {
 
   it("sorts rules by priority before evaluating (input order independent)", () => {
     const shuffled: CategoryRule[] = [
-      { id: 11, keyword: "スーパー", institution: null, category: "その他", priority: 50 },
-      { id: 10, keyword: "スーパー", institution: null, category: "食料品", priority: 5 },
+      { id: 11, owner: "husband", keyword: "スーパー", institution: null, category: "その他", priority: 50 },
+      { id: 10, owner: "husband", keyword: "スーパー", institution: null, category: "食料品", priority: 5 },
     ];
     // categorizeMany sorts internally.
     const [tx] = categorizeMany(
