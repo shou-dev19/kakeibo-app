@@ -5,6 +5,7 @@ import {
   runImports,
   type ImportFileInput,
 } from "../services/importer";
+import { requireOwner } from "../services/owner";
 
 const imports = new Hono<AppEnv>();
 
@@ -43,7 +44,7 @@ imports.post("/preview", async (c) => {
   const files = body ? parseFiles(body) : null;
   if (!files) return c.json({ error: "files is required" }, 400);
 
-  const results = await previewImports(c.env.DB, files);
+  const results = await previewImports(c.env.DB, requireOwner(c), files);
   return c.json({ files: results });
 });
 
@@ -58,7 +59,7 @@ imports.post("/", async (c) => {
   const files = body ? parseFiles(body) : null;
   if (!files) return c.json({ error: "files is required" }, 400);
 
-  const results = await runImports(c.env.DB, files);
+  const results = await runImports(c.env.DB, requireOwner(c), files);
   return c.json({ files: results });
 });
 

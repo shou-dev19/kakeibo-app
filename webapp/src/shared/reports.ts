@@ -4,7 +4,7 @@
 // (already fetched from D1) and returns a serializable result, so the whole
 // aggregation surface is unit-testable without a database.
 
-import type { SecuritiesBalance, Transaction } from "./types";
+import { OWNERS, type Owner, type SecuritiesBalance, type Transaction } from "./types";
 
 /** The always-excluded transfer category (振替), enforced in app logic. */
 export const TRANSFER_CATEGORY = "振替";
@@ -14,6 +14,7 @@ const UNCATEGORIZED = "未分類";
 
 /** Minimal transaction shape the reports need. */
 export interface ReportTransaction {
+  owner: Owner;
   date: string; // YYYY-MM-DD
   amount: number;
   type: string; // '収入' | '支出'
@@ -252,16 +253,52 @@ export interface PortfolioSlice {
   value: number;
 }
 
+/** 利用者ごとの資産内訳。合算表示のときに誰の分がいくらかを示す。 */
+export interface PortfolioOwnerRow {
+  owner: Owner;
+  bankTotal: number;
+  securitiesTotal: number;
+  total: number;
+}
+
 export interface PortfolioReport {
   bankTotal: number; // 預金・現金
   securitiesTotal: number; // 証券
   total: number;
   slices: PortfolioSlice[]; // [{預金・現金}, {証券}] with non-... included
+  /** 利用者別の内訳。単独スコープでも1行だけ返る。 */
+  byOwner: PortfolioOwnerRow[];
 }
 
 /** Only bank transactions with a non-null balance participate in asset series. */
 function withBalance(txs: ReportTransaction[]): ReportTransaction[] {
   return txs.filter((tx) => tx.balance != null);
+}
+
+/**
+ * Asset totals carry forward the latest balance *per account*, and an account is
+ * identified by its owner as well as its name. Keying on the institution alone
+ * would let one spouse's balance overwrite the other's whenever they both bank
+ * with the same institution, under-reporting the combined total.
+ */
+const SERIES_KEY_SEP = " ";
+
+function bankKey(tx: ReportTransaction): string {
+  return `${tx.owner}${SERIES_KEY_SEP}${tx.institution ?? ""}`;
+}
+
+function securitiesKey(s: SecuritiesBalance): string {
+  return `${s.owner}${SERIES_KEY_SEP}${s.brokerage}`;
+}
+
+/** Sum the values of a latest-per-key map, optionally for one owner only. */
+function sumByOwner(latest: Map<string, number>, owner?: Owner): number {
+  let total = 0;
+  for (const [key, value] of latest) {
+    if (owner != null && !key.startsWith(`${owner}${SERIES_KEY_SEP}`)) continue;
+    total += value;
+  }
+  return total;
 }
 
 /**
@@ -294,12 +331,12 @@ export function buildAssetSeries(
   for (const date of dates) {
     while (bi < sortedBank.length && sortedBank[bi].date <= date) {
       const tx = sortedBank[bi];
-      lastBank.set(tx.institution ?? "", tx.balance as number);
+      lastBank.set(bankKey(tx), tx.balance as number);
       bi++;
     }
     while (si < sortedSec.length && sortedSec[si].date <= date) {
       const s = sortedSec[si];
-      lastSec.set(s.brokerage, s.value);
+      lastSec.set(securitiesKey(s), s.value);
       si++;
     }
 
@@ -322,16 +359,32 @@ export function buildPortfolio(
   securities: SecuritiesBalance[],
 ): PortfolioReport {
   const latestBank = new Map<string, number>();
+  const owners = new Set<Owner>();
   for (const tx of withBalance(txs)) {
-    latestBank.set(tx.institution ?? "", tx.balance as number);
+    latestBank.set(bankKey(tx), tx.balance as number);
+    owners.add(tx.owner);
   }
-  const bankTotal = [...latestBank.values()].reduce((s, v) => s + v, 0);
+  const bankTotal = sumByOwner(latestBank);
 
   const latestSec = new Map<string, number>();
   for (const s of securities) {
-    latestSec.set(s.brokerage, s.value);
+    latestSec.set(securitiesKey(s), s.value);
+    owners.add(s.owner);
   }
-  const securitiesTotal = [...latestSec.values()].reduce((s, v) => s + v, 0);
+  const securitiesTotal = sumByOwner(latestSec);
+
+  const byOwner: PortfolioOwnerRow[] = OWNERS.filter((owner) =>
+    owners.has(owner),
+  ).map((owner) => {
+    const bank = sumByOwner(latestBank, owner);
+    const sec = sumByOwner(latestSec, owner);
+    return {
+      owner,
+      bankTotal: bank,
+      securitiesTotal: sec,
+      total: bank + sec,
+    };
+  });
 
   return {
     bankTotal,
@@ -341,6 +394,7 @@ export function buildPortfolio(
       { label: "預金・現金", value: bankTotal },
       { label: "証券", value: securitiesTotal },
     ],
+    byOwner,
   };
 }
 

@@ -12,6 +12,7 @@ import {
   buildMonthlyReport,
   buildPortfolio,
 } from "../../shared/reports";
+import { parseOwnerScope } from "../services/owner";
 
 const reports = new Hono<AppEnv>();
 
@@ -22,8 +23,9 @@ function intParam(v: string | undefined): number | undefined {
 }
 
 /**
- * GET /api/reports/monthly?year=&month=
+ * GET /api/reports/monthly?year=&month=&owner=
  * Monthly income/expense summary + per-category expense breakdown.
+ * `owner` is a read scope ('husband' | 'wife' | 'all', default 'all').
  */
 reports.get("/monthly", async (c) => {
   const year = intParam(c.req.query("year"));
@@ -31,9 +33,11 @@ reports.get("/monthly", async (c) => {
   if (year == null || month == null || month < 1 || month > 12) {
     return c.json({ error: "year and month (1-12) are required" }, 400);
   }
+  const scope = parseOwnerScope(c.req.query("owner"));
+  if (scope == null) return c.json({ error: "invalid owner" }, 400);
 
   const [txs, balanceExcluded] = await Promise.all([
-    getTransactionsForMonth(c.env.DB, year, month),
+    getTransactionsForMonth(c.env.DB, year, month, scope),
     getExcludedByScope(c.env.DB, "balance"),
   ]);
   const report = buildMonthlyReport(txs, year, month, balanceExcluded);
@@ -41,7 +45,7 @@ reports.get("/monthly", async (c) => {
 });
 
 /**
- * GET /api/reports/annual?year=&month=
+ * GET /api/reports/annual?year=&month=&owner=
  * Trailing 12-month summary. Reference month defaults to the current month
  * (server time) when year/month are omitted.
  */
@@ -56,9 +60,11 @@ reports.get("/annual", async (c) => {
   if (month < 1 || month > 12) {
     return c.json({ error: "month must be 1-12" }, 400);
   }
+  const scope = parseOwnerScope(c.req.query("owner"));
+  if (scope == null) return c.json({ error: "invalid owner" }, 400);
 
   const [txs, balanceExcluded, annualExcluded] = await Promise.all([
-    getAllTransactions(c.env.DB),
+    getAllTransactions(c.env.DB, scope),
     getExcludedByScope(c.env.DB, "balance"),
     getExcludedByScope(c.env.DB, "annual"),
   ]);
@@ -67,13 +73,16 @@ reports.get("/annual", async (c) => {
 });
 
 /**
- * GET /api/reports/assets
+ * GET /api/reports/assets?owner=
  * Daily total-asset series + current portfolio snapshot.
  */
 reports.get("/assets", async (c) => {
+  const scope = parseOwnerScope(c.req.query("owner"));
+  if (scope == null) return c.json({ error: "invalid owner" }, 400);
+
   const [txs, securities] = await Promise.all([
-    getAllTransactions(c.env.DB),
-    getSecurities(c.env.DB),
+    getAllTransactions(c.env.DB, scope),
+    getSecurities(c.env.DB, scope),
   ]);
   const series = buildAssetSeries(txs, securities);
   const portfolio = buildPortfolio(txs, securities);

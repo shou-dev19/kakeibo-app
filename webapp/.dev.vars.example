@@ -12,3 +12,13 @@ DEV_BYPASS_ACCESS=true
 # Comma-separated allow-list of permitted email addresses (used when
 # DEV_BYPASS_ACCESS is not "true").
 ALLOWED_EMAILS=husband@example.com,wife@example.com
+
+# Maps each allowed email to a user ('husband' or 'wife'). An email that is in
+# ALLOWED_EMAILS but missing here is rejected with 403 — an unidentified user
+# must never be able to write data. In production this is a Worker Secret
+# (`wrangler secret put OWNER_EMAILS`) so the addresses stay out of git.
+OWNER_EMAILS=husband:husband@example.com,wife:wife@example.com
+
+# Which user you act as while DEV_BYPASS_ACCESS is true. Switch to `wife` to
+# check how the app looks for the other user. Defaults to `husband`.
+DEV_OWNER=husband

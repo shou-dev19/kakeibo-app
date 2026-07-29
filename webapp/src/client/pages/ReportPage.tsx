@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNav } from "../nav";
 import { defaultReportMonth } from "../lib/reportPeriod";
 import { Page } from "../components/ui";
+import { OwnerTabs, useOwnerScope } from "../components/OwnerTabs";
 import { MonthlySection } from "./report/MonthlySection";
 import { AnnualSection } from "./report/AnnualSection";
 import { AssetsSection } from "./report/AssetsSection";
@@ -25,6 +26,7 @@ export function ReportPage() {
   const [section, setSection] = useState<Section>(
     initial.reportSection ?? "monthly",
   );
+  const [ownerScope, setOwnerScope] = useOwnerScope();
 
   // Drilldown year/month wins; otherwise seed sections from two months ago.
   // Passed as `initial` — sections keep their own state so user month
@@ -54,9 +56,18 @@ export function ReportPage() {
         ))}
       </div>
 
-      {section === "monthly" && <MonthlySection initial={initialYm} />}
-      {section === "annual" && <AnnualSection initial={initialYm} />}
-      {section === "assets" && <AssetsSection />}
+      {/* 割り勘は世帯単位の数字なので、利用者の切替は出さない。 */}
+      {section !== "splitwise" && (
+        <OwnerTabs value={ownerScope} onChange={setOwnerScope} />
+      )}
+
+      {section === "monthly" && (
+        <MonthlySection initial={initialYm} ownerScope={ownerScope} />
+      )}
+      {section === "annual" && (
+        <AnnualSection initial={initialYm} ownerScope={ownerScope} />
+      )}
+      {section === "assets" && <AssetsSection ownerScope={ownerScope} />}
       {section === "splitwise" && <SplitwiseSection initial={initialYm} />}
     </Page>
   );

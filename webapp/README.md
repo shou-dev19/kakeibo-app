@@ -105,6 +105,23 @@ npm run dev
 メールアドレスをカンマ区切りで指定。JWT 検証成功後に email クレームを
 このリストと突き合わせ、含まれない場合は 403 を返します）。
 
+### 利用者（夫 / 妻）の設定
+
+明細・証券残高・分類ルールは利用者ごとに分かれています。DB にはメールアドレス
+ではなく `husband` / `wife` という固定キーだけを保存し、メールとの対応は Worker
+Secret `OWNER_EMAILS` が持ちます。
+
+```bash
+wrangler secret put OWNER_EMAILS
+# husband:otto@example.com,wife:tsuma@example.com
+```
+
+`ALLOWED_EMAILS` に含まれていても `OWNER_EMAILS` で利用者を特定できない
+メールアドレスは 403 になります（利用者不明のまま書き込ませないため）。
+
+ローカル開発では `.dev.vars` の `DEV_OWNER`（`husband` / `wife`、既定は
+`husband`）でどちらとしてログインするかを切り替えられます。
+
 ## コマンド一覧
 
 | コマンド | 内容 |

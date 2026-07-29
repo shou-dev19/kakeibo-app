@@ -11,6 +11,7 @@ import {
   Spinner,
 } from "../../components/ui";
 import { Field, ModalActions } from "./CategoryRulesSection";
+import { SharedBadge } from "../../components/SharedBadge";
 
 type Draft = {
   name: string;
@@ -47,7 +48,10 @@ export function CsvFormatsSection() {
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700">CSVフォーマット</h2>
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+          CSVフォーマット
+          <SharedBadge />
+        </h2>
         <Button variant="ghost" onClick={() => setEditing("new")}>
           ＋ 追加
         </Button>

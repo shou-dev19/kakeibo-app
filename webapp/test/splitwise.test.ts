@@ -48,6 +48,7 @@ const rules: SplitRule[] = [
 
 function tx(overrides: Partial<SplitwiseTransaction>): SplitwiseTransaction {
   return {
+    owner: "husband",
     date: "2025-07-10",
     description: "買い物",
     amount: 1000,
@@ -206,7 +207,7 @@ describe("calculateSplitwise", () => {
 
     const res = calculateSplitwise([overlap], overlapRules, 2025, 7);
     expect(res.items[0].rate).toBe(50);
-    expect(res.totalBilled).toBe(500);
+    expect(res.wifeShare).toBe(500);
   });
 
   it("excludes 振替 and non-支出 transactions", () => {
@@ -220,20 +221,20 @@ describe("calculateSplitwise", () => {
     expect(res.items[0].description).toBe("割り勘対象");
   });
 
-  it("computes billed = amount * rate/100 and per-rate subtotals", () => {
+  it("computes 妻負担額 = amount * rate/100 and per-rate subtotals", () => {
     const txs = [
       tx({ description: "割り勘A", amount: 1000 }), // 50% -> 500
       tx({ description: "ﾖｺﾊﾏｼﾎｲｸﾘﾖｳ", amount: 20000 }), // 31% -> 6200
       tx({ institution: "イオンカード", description: "全額", amount: 3000 }), // 100% -> 3000
     ];
     const res = calculateSplitwise(txs, rules, 2025, 7);
-    expect(res.totalBilled).toBe(500 + 6200 + 3000);
+    expect(res.wifeShare).toBe(500 + 6200 + 3000);
 
     const byRate = Object.fromEntries(res.subtotals.map((s) => [s.rate, s]));
     expect(byRate[50].amount).toBe(1000);
-    expect(byRate[50].billed).toBe(500);
-    expect(byRate[31].billed).toBe(6200);
-    expect(byRate[100].billed).toBe(3000);
+    expect(byRate[50].wifeShare).toBe(500);
+    expect(byRate[31].wifeShare).toBe(6200);
+    expect(byRate[100].wifeShare).toBe(3000);
     // subtotals sorted rate desc
     expect(res.subtotals.map((s) => s.rate)).toEqual([100, 50, 31]);
   });
@@ -241,7 +242,7 @@ describe("calculateSplitwise", () => {
   it("totals from rate-grouped subtotals (unrounded), matching GAS to the yen", () => {
     // GAS computes splitTotal*0.5 (unrounded). Three 101円 lines at 50% give a
     // subtotal amount of 303; 303*0.5 = 151.5. Summing rounded per-line shares
-    // (Math.round(101*0.5)=51 each → 153) would drift by 1.5円, so totalBilled
+    // (Math.round(101*0.5)=51 each → 153) would drift by 1.5円, so wifeShare
     // must keep the fraction.
     const txs = [
       tx({ description: "割り勘A", amount: 101 }),
@@ -249,15 +250,15 @@ describe("calculateSplitwise", () => {
       tx({ description: "割り勘C", amount: 101 }),
     ];
     const res = calculateSplitwise(txs, rules, 2025, 7);
-    expect(res.totalBilled).toBe(151.5);
+    expect(res.wifeShare).toBe(151.5);
 
     const sub50 = res.subtotals.find((s) => s.rate === 50)!;
     expect(sub50.amount).toBe(303);
-    expect(sub50.billed).toBe(151.5); // unrounded, not 3 * round(50.5) = 153
+    expect(sub50.wifeShare).toBe(151.5); // unrounded, not 3 * round(50.5) = 153
     expect(sub50.count).toBe(3);
 
-    // Line-level billed remains the rounded display value.
-    expect(res.items.map((i) => i.billed)).toEqual([51, 51, 51]);
+    // Line-level wifeShare remains the rounded display value.
+    expect(res.items.map((i) => i.wifeShare)).toEqual([51, 51, 51]);
   });
 
   it("differs from GAS only for a description matching BOTH 31% special and 50% keyword", () => {
@@ -273,7 +274,7 @@ describe("calculateSplitwise", () => {
     const res = calculateSplitwise([overlap], rules, 2025, 7);
     // Web (sort-based) result: 50%, NOT the GAS 31%.
     expect(res.items[0].rate).toBe(50);
-    expect(res.totalBilled).toBe(500);
+    expect(res.wifeShare).toBe(500);
   });
 
   it("reproduces the full GAS 5-stage precedence in a single mixed batch", () => {
@@ -291,5 +292,128 @@ describe("calculateSplitwise", () => {
     ];
     const res = calculateSplitwise(txs, rules, 2025, 7);
     expect(res.items.map((i) => i.rate)).toEqual([100, 50, 100, 31, 50]);
+  });
+});
+
+// 割り勘は「夫視点の請求額」ではなく「夫負担額 / 妻負担額」という客観的な配分。
+describe("calculateSplitwise: 夫負担額 / 妻負担額", () => {
+  it("splits the total into the two shares, which always add back up", () => {
+    const txs = [
+      tx({ description: "割り勘A", amount: 1000 }), // 妻 50% -> 500 / 500
+      tx({ institution: "イオンカード", description: "全額", amount: 3000 }), // 妻 100%
+    ];
+    const res = calculateSplitwise(txs, rules, 2025, 7);
+    expect(res.totalAmount).toBe(4000);
+    expect(res.wifeShare).toBe(500 + 3000);
+    expect(res.husbandShare).toBe(500);
+    expect(res.husbandShare + res.wifeShare).toBe(res.totalAmount);
+  });
+
+  it("keeps the two shares exact even when the rate produces a fraction", () => {
+    // 101円 × 3 at 50% => 妻 151.5. Deriving 夫 by subtraction (303 - 151.5)
+    // keeps the pair summing to the total; applying (100 - rate) separately
+    // would risk the two halves drifting apart.
+    const txs = [
+      tx({ description: "割り勘A", amount: 101 }),
+      tx({ description: "割り勘B", amount: 101 }),
+      tx({ description: "割り勘C", amount: 101 }),
+    ];
+    const res = calculateSplitwise(txs, rules, 2025, 7);
+    expect(res.wifeShare).toBe(151.5);
+    expect(res.husbandShare).toBe(151.5);
+    expect(res.husbandShare + res.wifeShare).toBe(res.totalAmount);
+  });
+
+  it("applies the same rate no matter which spouse paid", () => {
+    const byHusband = calculateSplitwise(
+      [tx({ owner: "husband", description: "割り勘A", amount: 1000 })],
+      rules,
+      2025,
+      7,
+    );
+    const byWife = calculateSplitwise(
+      [tx({ owner: "wife", description: "割り勘A", amount: 1000 })],
+      rules,
+      2025,
+      7,
+    );
+    expect(byWife.wifeShare).toBe(byHusband.wifeShare);
+    expect(byWife.husbandShare).toBe(byHusband.husbandShare);
+  });
+
+  it("tracks who actually fronted the money", () => {
+    const txs = [
+      tx({ owner: "husband", description: "割り勘A", amount: 1000 }),
+      tx({ owner: "wife", description: "割り勘B", amount: 400 }),
+    ];
+    const res = calculateSplitwise(txs, rules, 2025, 7);
+    expect(res.husbandPaid).toBe(1000);
+    expect(res.wifePaid).toBe(400);
+    expect(res.husbandPaid + res.wifePaid).toBe(res.totalAmount);
+  });
+
+  it("settles positive when the wife still owes, negative when she overpaid", () => {
+    // 妻負担 700 (= 1400 × 50%), 実支払 400 -> 妻が 300 払う。
+    const owes = calculateSplitwise(
+      [
+        tx({ owner: "husband", description: "割り勘A", amount: 1000 }),
+        tx({ owner: "wife", description: "割り勘B", amount: 400 }),
+      ],
+      rules,
+      2025,
+      7,
+    );
+    expect(owes.settlement).toBe(300);
+
+    // 妻負担 700, 実支払 1000 -> 夫が 300 払う (符号が反転)。
+    const overpaid = calculateSplitwise(
+      [
+        tx({ owner: "husband", description: "割り勘A", amount: 400 }),
+        tx({ owner: "wife", description: "割り勘B", amount: 1000 }),
+      ],
+      rules,
+      2025,
+      7,
+    );
+    expect(overpaid.settlement).toBe(-300);
+  });
+
+  it("reports the two shares per rate as well", () => {
+    const res = calculateSplitwise(
+      [tx({ description: "割り勘A", amount: 1000 })],
+      rules,
+      2025,
+      7,
+    );
+    const sub50 = res.subtotals.find((s) => s.rate === 50)!;
+    expect(sub50.wifeShare).toBe(500);
+    expect(sub50.husbandShare).toBe(500);
+    expect(sub50.husbandShare + sub50.wifeShare).toBe(sub50.amount);
+  });
+
+  it("leaves unmatched expenses out of the split entirely", () => {
+    const res = calculateSplitwise(
+      [
+        tx({ description: "割り勘A", amount: 1000 }),
+        tx({ institution: "現金", description: "個人的な買い物", amount: 5000 }),
+      ],
+      rules,
+      2025,
+      7,
+    );
+    expect(res.totalAmount).toBe(1000);
+    expect(res.items).toHaveLength(1);
+  });
+
+  it("returns zeroed totals for a month with no eligible transactions", () => {
+    const res = calculateSplitwise([], rules, 2025, 7);
+    expect(res).toMatchObject({
+      totalAmount: 0,
+      husbandShare: 0,
+      wifeShare: 0,
+      husbandPaid: 0,
+      wifePaid: 0,
+      settlement: 0,
+    });
   });
 });

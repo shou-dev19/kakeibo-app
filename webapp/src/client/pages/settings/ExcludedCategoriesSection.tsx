@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, type ExclusionScope } from "../../lib/api";
 import { useAsync } from "../../hooks/useAsync";
 import { useToast } from "../../components/Toast";
+import { SharedBadge } from "../../components/SharedBadge";
 import {
   Button,
   Card,
@@ -55,7 +56,10 @@ export function ExcludedCategoriesSection() {
 
   return (
     <Card className="flex flex-col gap-3">
-      <h2 className="text-sm font-semibold text-gray-700">除外カテゴリ</h2>
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+        除外カテゴリ
+        <SharedBadge />
+      </h2>
       <p className="-mt-1 text-xs text-gray-400">
         「振替」は設定に関わらず常に収支計算から除外されます。
       </p>

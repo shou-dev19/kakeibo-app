@@ -13,8 +13,11 @@ function intParam(v: string | undefined): number | undefined {
 
 /**
  * GET /api/splitwise?year=&month=
- * Split-payment calculation for the month: total billed, per-rate subtotals,
- * and matched line items with their applied rate.
+ * Split-payment calculation for the month: 夫負担額 / 妻負担額, the settlement
+ * between them, per-rate subtotals, and the matched line items.
+ *
+ * No `owner` query parameter: the split is a household-level figure and is
+ * always computed across both users' transactions.
  */
 splitwise.get("/", async (c) => {
   const year = intParam(c.req.query("year"));

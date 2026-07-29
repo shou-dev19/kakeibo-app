@@ -41,6 +41,7 @@ describe("RuleModal category select", () => {
   it("selects the saved category when editing a rule", () => {
     const markup = renderRuleModal({
       id: 1,
+      owner: "husband",
       keyword: "スーパー",
       institution: null,
       category: "食料品",

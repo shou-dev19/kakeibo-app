@@ -6,6 +6,7 @@ import {
 } from "../lib/api";
 import { useAsync } from "../hooks/useAsync";
 import { useToast } from "../components/Toast";
+import { useMe } from "../hooks/useMe";
 import { fileToBase64 } from "../lib/file";
 import { Button, Card, EmptyState, Page, Spinner } from "../components/ui";
 
@@ -19,6 +20,7 @@ interface StagedFile {
 /** CSV import: multi-file drag&drop -> preview -> bulk import with per-file results. */
 export function ImportPage() {
   const toast = useToast();
+  const me = useMe();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -123,6 +125,15 @@ export function ImportPage() {
 
   return (
     <Page title="CSVインポート">
+      {/* 取り込んだ明細は「アップロードした人のもの」として登録される。分類にも
+          その人の分類ルールが使われるので、誰として取り込むのかを明示する。 */}
+      {me && (
+        <p className="-mt-2 text-sm text-gray-500">
+          {me.label}の明細として取り込みます（分類には{me.label}
+          の分類ルールを使用します）
+        </p>
+      )}
+
       {/* Drop zone */}
       <div
         onDragOver={(e) => {

@@ -8,6 +8,7 @@ import type { TransactionListItem } from "../src/client/lib/api";
 
 const tx: TransactionListItem = {
   id: 1,
+  owner: "husband",
   date: "2026-07-01",
   description: "Amazon 注文",
   amount: 1000,

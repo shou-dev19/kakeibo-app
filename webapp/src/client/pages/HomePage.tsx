@@ -11,6 +11,8 @@ import {
 import { Card, EmptyState, ErrorMessage, Page, Spinner, Stat } from "../components/ui";
 import { CategoryPie, type PieDatum } from "../components/charts";
 import { getCategoryColor } from "../lib/categoryColors";
+import { useMe } from "../hooks/useMe";
+import { OWNER_LABELS } from "../../shared/types";
 
 /**
  * Dashboard wrapper: resolves the latest data month before mounting the actual
@@ -30,17 +32,22 @@ export function HomePage() {
 
 /**
  * Dashboard: the target month's income/expense/balance, category expense pie,
- * total assets, and split-payment bill. Cards deep-link to the relevant
+ * total assets, and the split-payment shares. Cards deep-link to the relevant
  * screens. `ym` is the latest month with data (fixed at mount).
+ *
+ * Everything here is the household total (夫婦合算) — no owner switch. The home
+ * screen answers "how are we doing?"; per-person figures live on 明細 and
+ * レポート, which both carry the owner tabs.
  */
 function HomeContent({ ym }: { ym: YearMonth }) {
   const { go } = useNav();
+  const me = useMe();
 
-  const monthly = useAsync(() => api.getMonthlyReport(ym.year, ym.month), [
-    ym.year,
-    ym.month,
-  ]);
-  const assets = useAsync(() => api.getAssets(), []);
+  const monthly = useAsync(
+    () => api.getMonthlyReport(ym.year, ym.month, "all"),
+    [ym.year, ym.month],
+  );
+  const assets = useAsync(() => api.getAssets("all"), []);
   const split = useAsync(() => api.getSplitwise(ym.year, ym.month), [
     ym.year,
     ym.month,
@@ -48,7 +55,14 @@ function HomeContent({ ym }: { ym: YearMonth }) {
 
   return (
     <Page title={`ホーム（${formatYearMonth(ym)}）`}>
-      <p className="-mt-2 text-sm text-gray-500">{formatYearMonth(ym)}の状況</p>
+      <p className="-mt-2 flex flex-wrap items-center gap-x-2 text-sm text-gray-500">
+        <span>{formatYearMonth(ym)}の状況（夫婦合算）</span>
+        {me && (
+          <span className="text-xs text-gray-400">
+            {me.label}としてログイン中
+          </span>
+        )}
+      </p>
 
       {/* Income / expense / balance summary */}
       {monthly.loading ? (
@@ -106,11 +120,11 @@ function HomeContent({ ym }: { ym: YearMonth }) {
         </Card>
 
         <div className="flex flex-col gap-4">
-          {/* Total assets */}
+          {/* Total assets (夫婦合算) */}
           <Card onClick={() => go("report", { reportSection: "assets" })}>
             <div className="flex items-center justify-between">
               <Stat
-                label="総資産"
+                label="総資産（夫婦合算）"
                 value={
                   assets.loading
                     ? "…"
@@ -122,9 +136,20 @@ function HomeContent({ ym }: { ym: YearMonth }) {
               <span className="text-gray-300">›</span>
             </div>
             {assets.data && (
-              <div className="mt-2 flex gap-4 text-xs text-gray-500">
-                <span>預金 {formatYen(assets.data.portfolio.bankTotal)}</span>
-                <span>証券 {formatYen(assets.data.portfolio.securitiesTotal)}</span>
+              <div className="mt-2 flex flex-col gap-1 text-xs text-gray-500">
+                <div className="flex gap-4">
+                  <span>預金 {formatYen(assets.data.portfolio.bankTotal)}</span>
+                  <span>証券 {formatYen(assets.data.portfolio.securitiesTotal)}</span>
+                </div>
+                {assets.data.portfolio.byOwner.length > 1 && (
+                  <div className="flex gap-4">
+                    {assets.data.portfolio.byOwner.map((row) => (
+                      <span key={row.owner}>
+                        {OWNER_LABELS[row.owner]} {formatYen(row.total)}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             {assets.error && (
@@ -132,7 +157,7 @@ function HomeContent({ ym }: { ym: YearMonth }) {
             )}
           </Card>
 
-          {/* Splitwise bill */}
+          {/* Split-payment shares */}
           <Card
             onClick={() =>
               go("report", {
@@ -143,17 +168,32 @@ function HomeContent({ ym }: { ym: YearMonth }) {
             }
           >
             <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-700">
+                {formatYearMonth(ym)}の割り勘
+              </h2>
+              <span className="text-gray-300">›</span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
               <Stat
-                label={`${formatYearMonth(ym)}の割り勘請求額`}
+                label={`${OWNER_LABELS.husband}負担額`}
                 value={
                   split.loading
                     ? "…"
                     : split.data
-                      ? formatYen(split.data.totalBilled)
+                      ? formatYen(split.data.husbandShare)
                       : "-"
                 }
               />
-              <span className="text-gray-300">›</span>
+              <Stat
+                label={`${OWNER_LABELS.wife}負担額`}
+                value={
+                  split.loading
+                    ? "…"
+                    : split.data
+                      ? formatYen(split.data.wifeShare)
+                      : "-"
+                }
+              />
             </div>
             {split.error && (
               <p className="mt-1 text-xs text-rose-600">{split.error}</p>

@@ -11,12 +11,24 @@ import type { SecuritiesBalance } from "../src/shared/types";
 
 function t(o: Partial<ReportTransaction>): ReportTransaction {
   return {
+    owner: "husband",
     date: "2025-07-01",
     amount: 1000,
     type: "支出",
     category: "食料品",
     institution: "銀行A",
     balance: null,
+    ...o,
+  };
+}
+
+function sec(o: Partial<SecuritiesBalance>): SecuritiesBalance {
+  return {
+    id: 1,
+    owner: "husband",
+    date: "2025-02-01",
+    brokerage: "SBI",
+    value: 1000,
     ...o,
   };
 }
@@ -106,13 +118,13 @@ describe("buildAssetSeries & buildPortfolio", () => {
     t({ date: "2025-02-01", institution: "銀行B", balance: 50 }),
     t({ date: "2025-03-01", institution: "銀行A", balance: 120 }),
   ];
-  const sec: SecuritiesBalance[] = [
-    { id: 1, date: "2025-02-01", brokerage: "SBI", value: 1000 },
-    { id: 2, date: "2025-03-01", brokerage: "SBI", value: 1200 },
+  const securities: SecuritiesBalance[] = [
+    sec({ id: 1, date: "2025-02-01", brokerage: "SBI", value: 1000 }),
+    sec({ id: 2, date: "2025-03-01", brokerage: "SBI", value: 1200 }),
   ];
 
   it("carries forward the latest balance per institution/brokerage across the date union", () => {
-    const series = buildAssetSeries(bank, sec);
+    const series = buildAssetSeries(bank, securities);
     expect(series.map((p) => p.date)).toEqual(["2025-01-01", "2025-02-01", "2025-03-01"]);
     // 2025-01-01: only 銀行A=100
     expect(series[0].total).toBe(100);
@@ -128,13 +140,55 @@ describe("buildAssetSeries & buildPortfolio", () => {
   });
 
   it("portfolio sums the latest balance per institution + latest value per brokerage", () => {
-    const p = buildPortfolio(bank, sec);
+    const p = buildPortfolio(bank, securities);
     expect(p.bankTotal).toBe(120 + 50); // 銀行A latest 120, 銀行B 50
     expect(p.securitiesTotal).toBe(1200);
     expect(p.total).toBe(1370);
     expect(p.slices).toEqual([
       { label: "預金・現金", value: 170 },
       { label: "証券", value: 1200 },
+    ]);
+  });
+
+  // Regression: totals used to be keyed on the institution/brokerage name
+  // alone, so two people banking at the same institution silently overwrote
+  // each other and the combined total came out too low.
+  describe("when both users hold accounts at the same institution", () => {
+    const shared: ReportTransaction[] = [
+      t({ owner: "husband", date: "2025-01-01", institution: "銀行A", balance: 100 }),
+      t({ owner: "wife", date: "2025-01-01", institution: "銀行A", balance: 30 }),
+    ];
+    const sharedSec: SecuritiesBalance[] = [
+      sec({ id: 1, owner: "husband", date: "2025-01-01", brokerage: "SBI", value: 1000 }),
+      sec({ id: 2, owner: "wife", date: "2025-01-01", brokerage: "SBI", value: 400 }),
+    ];
+
+    it("adds both balances instead of letting one overwrite the other", () => {
+      const p = buildPortfolio(shared, sharedSec);
+      expect(p.bankTotal).toBe(130);
+      expect(p.securitiesTotal).toBe(1400);
+      expect(p.total).toBe(1530);
+    });
+
+    it("keeps the daily series consistent with the portfolio", () => {
+      const series = buildAssetSeries(shared, sharedSec);
+      expect(series).toEqual([{ date: "2025-01-01", total: 1530 }]);
+    });
+
+    it("breaks the total down per owner", () => {
+      const p = buildPortfolio(shared, sharedSec);
+      expect(p.byOwner).toEqual([
+        { owner: "husband", bankTotal: 100, securitiesTotal: 1000, total: 1100 },
+        { owner: "wife", bankTotal: 30, securitiesTotal: 400, total: 430 },
+      ]);
+      expect(p.byOwner.reduce((sum, row) => sum + row.total, 0)).toBe(p.total);
+    });
+  });
+
+  it("reports a single-owner breakdown when only one user has data", () => {
+    const p = buildPortfolio(bank, securities);
+    expect(p.byOwner).toEqual([
+      { owner: "husband", bankTotal: 170, securitiesTotal: 1200, total: 1370 },
     ]);
   });
 });

@@ -2,6 +2,7 @@ import { createMiddleware } from "hono/factory";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { JWTPayload } from "jose";
 import type { AppEnv } from "../types";
+import { devOwner, resolveOwner } from "../services/owner";
 
 /**
  * Cloudflare Access JWT verification middleware (second wall of defense).
@@ -12,9 +13,14 @@ import type { AppEnv } from "../types";
  *   1. Verify the JWT signature / issuer / audience against Access' JWKS.
  *   2. Re-check the `email` claim against the ALLOWED_EMAILS allow-list, so a
  *      misconfigured Access policy alone cannot grant access.
+ *   3. Resolve the email to an Owner ('husband' | 'wife') via OWNER_EMAILS and
+ *      stash it on the context. Requests whose email is allow-listed but has no
+ *      Owner mapping are rejected — an unidentified user must never be able to
+ *      write data that would then belong to nobody.
  *
  * In local development, set `DEV_BYPASS_ACCESS=true` (in `.dev.vars`) to skip
- * verification entirely. This must never be enabled in production.
+ * verification entirely; `DEV_OWNER` then selects which user you act as. This
+ * must never be enabled in production.
  */
 
 const ACCESS_HEADER = "Cf-Access-Jwt-Assertion";
@@ -75,6 +81,7 @@ export function createAccessAuth(options: AccessAuthOptions = {}) {
 
   return createMiddleware<AppEnv>(async (c, next) => {
     if (c.env.DEV_BYPASS_ACCESS === "true") {
+      c.set("owner", devOwner(c.env.DEV_OWNER));
       await next();
       return;
     }
@@ -107,7 +114,15 @@ export function createAccessAuth(options: AccessAuthOptions = {}) {
       return c.json({ error: "Email not allowed" }, 403);
     }
 
+    // The allow-list says *whether* you may in; OWNER_EMAILS says *who you are*.
+    // Both must agree, so neither list alone can widen access.
+    const owner = resolveOwner(email, c.env.OWNER_EMAILS);
+    if (!owner) {
+      return c.json({ error: "利用者を特定できません" }, 403);
+    }
+
     c.set("accessPayload", payload);
+    c.set("owner", owner);
     await next();
   });
 }

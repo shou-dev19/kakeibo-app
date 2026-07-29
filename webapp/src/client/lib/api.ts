@@ -11,6 +11,10 @@ import type {
   CsvFormat,
   ExcludedCategory,
   ExclusionScope,
+  MeResponse,
+  Owner,
+  OwnerScope,
+  RecategorizeRun,
   SecuritiesBalance,
   SplitMatchType,
   SplitRule,
@@ -22,6 +26,10 @@ export type {
   CsvFormat,
   ExcludedCategory,
   ExclusionScope,
+  MeResponse,
+  Owner,
+  OwnerScope,
+  RecategorizeRun,
   SecuritiesBalance,
   SplitMatchType,
   SplitRule,
@@ -34,6 +42,9 @@ export type TransactionListItem = Omit<Transaction, "category_locked"> & {
   categoryLocked: boolean;
   splitRate: number | null;
 };
+
+/** 分類ルールの入力値。owner はサーバがログインから決めるので送らない。 */
+export type CategoryRuleInput = Omit<CategoryRule, "id" | "owner">;
 
 export interface CategoryRulePreview {
   matchCount: number;
@@ -61,6 +72,8 @@ export interface TransactionPage {
 }
 
 export interface TransactionFilterQuery {
+  /** 読み取りスコープ。省略時は 'all' (夫婦合算)。 */
+  owner?: OwnerScope;
   year?: number;
   month?: number;
   category?: string;
@@ -119,11 +132,19 @@ export interface PortfolioSlice {
   value: number;
 }
 
+export interface PortfolioOwnerRow {
+  owner: Owner;
+  bankTotal: number;
+  securitiesTotal: number;
+  total: number;
+}
+
 export interface PortfolioReport {
   bankTotal: number;
   securitiesTotal: number;
   total: number;
   slices: PortfolioSlice[];
+  byOwner: PortfolioOwnerRow[];
 }
 
 export interface AssetsResponse {
@@ -135,27 +156,40 @@ export interface AssetsResponse {
 
 export interface SplitwiseLineItem {
   id?: number;
+  owner: Owner;
   date: string;
   description: string;
   amount: number;
   type: string;
   institution: string | null;
   category: string | null;
+  /** 妻の負担率 (%). 支払者が誰かによらず解釈は変わらない。 */
   rate: number;
-  billed: number;
+  /** 表示用の1行あたり妻負担額 (四捨五入済み)。合計には使わない。 */
+  wifeShare: number;
 }
 
 export interface SplitwiseRateSubtotal {
   rate: number;
   amount: number;
-  billed: number;
+  wifeShare: number;
+  husbandShare: number;
   count: number;
 }
 
 export interface SplitwiseResult {
   year: number;
   month: number;
-  totalBilled: number;
+  /** 割り勘対象の総額。 */
+  totalAmount: number;
+  /** 妻負担額。 */
+  wifeShare: number;
+  /** 夫負担額 (= totalAmount - wifeShare)。 */
+  husbandShare: number;
+  husbandPaid: number;
+  wifePaid: number;
+  /** 精算額。正なら妻→夫、負なら夫→妻。 */
+  settlement: number;
   subtotals: SplitwiseRateSubtotal[];
   items: SplitwiseLineItem[];
 }
@@ -193,6 +227,36 @@ export interface RecategorizeResult {
   updated: number;
   total: number;
   skippedLocked: number;
+  runId: number | null;
+}
+
+export interface RecategorizeSummaryRow {
+  from: string;
+  to: string;
+  count: number;
+}
+
+export interface RecategorizeSampleRow {
+  id: number;
+  date: string;
+  description: string;
+  from: string;
+  to: string;
+}
+
+export interface RecategorizePreview {
+  owner: Owner;
+  total: number;
+  skippedLocked: number;
+  changeCount: number;
+  summary: RecategorizeSummaryRow[];
+  samples: RecategorizeSampleRow[];
+}
+
+export interface RecategorizeUndoResult {
+  runId: number;
+  reverted: number;
+  skippedModified: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -263,10 +327,16 @@ function buildQuery(
 // ---------------------------------------------------------------------------
 
 export const api = {
+  /** The logged-in user. Drives the owner labels and edit permissions. */
+  getMe(): Promise<MeResponse> {
+    return request("/api/me");
+  },
+
   // Transactions
   getTransactions(filter: TransactionFilterQuery): Promise<TransactionPage> {
     return request<TransactionPage>("/api/transactions", {
       query: buildQuery({
+        owner: filter.owner,
         year: filter.year,
         month: filter.month,
         category: filter.category,
@@ -280,8 +350,11 @@ export const api = {
   getTransactionInstitutions(
     year: number,
     month: number,
+    owner?: OwnerScope,
   ): Promise<{ items: string[] }> {
-    return request("/api/transactions/institutions", { query: { year, month } });
+    return request("/api/transactions/institutions", {
+      query: { year, month, owner },
+    });
   },
   updateTransaction(
     id: number,
@@ -312,19 +385,38 @@ export const api = {
   deleteTransaction(id: number): Promise<{ ok: true }> {
     return request(`/api/transactions/${id}`, { method: "DELETE" });
   },
+  // Bulk re-categorization. All three act on the logged-in user only — the
+  // server derives the owner from the session, so there is nothing to pass.
+  previewRecategorize(): Promise<RecategorizePreview> {
+    return request("/api/transactions/recategorize/preview", { method: "POST" });
+  },
   recategorizeAll(): Promise<RecategorizeResult> {
     return request("/api/transactions/recategorize", { method: "POST" });
   },
+  undoRecategorize(): Promise<RecategorizeUndoResult> {
+    return request("/api/transactions/recategorize/undo", { method: "POST" });
+  },
+  getLastRecategorizeRun(): Promise<{ run: RecategorizeRun | null }> {
+    return request("/api/transactions/recategorize/last");
+  },
 
   // Reports
-  getMonthlyReport(year: number, month: number): Promise<MonthlyReport> {
-    return request("/api/reports/monthly", { query: { year, month } });
+  getMonthlyReport(
+    year: number,
+    month: number,
+    owner?: OwnerScope,
+  ): Promise<MonthlyReport> {
+    return request("/api/reports/monthly", { query: { year, month, owner } });
   },
-  getAnnualReport(year: number, month: number): Promise<AnnualReport> {
-    return request("/api/reports/annual", { query: { year, month } });
+  getAnnualReport(
+    year: number,
+    month: number,
+    owner?: OwnerScope,
+  ): Promise<AnnualReport> {
+    return request("/api/reports/annual", { query: { year, month, owner } });
   },
-  getAssets(): Promise<AssetsResponse> {
-    return request("/api/reports/assets");
+  getAssets(owner?: OwnerScope): Promise<AssetsResponse> {
+    return request("/api/reports/assets", { query: { owner } });
   },
 
   // Splitwise
@@ -333,8 +425,8 @@ export const api = {
   },
 
   // Securities
-  getSecurities(): Promise<{ items: SecuritiesBalance[] }> {
-    return request("/api/securities");
+  getSecurities(owner?: OwnerScope): Promise<{ items: SecuritiesBalance[] }> {
+    return request("/api/securities", { query: { owner } });
   },
   addSecurity(body: {
     date: string;
@@ -371,11 +463,12 @@ export const api = {
     return request("/api/settings/categories");
   },
 
-  // Settings: category rules
+  // Settings: category rules. Always scoped to the logged-in user by the
+  // server, so `owner` is never part of the request payload.
   getCategoryRules(): Promise<{ items: CategoryRule[] }> {
     return request("/api/settings/category-rules");
   },
-  addCategoryRule(body: Omit<CategoryRule, "id">): Promise<{ id: number }> {
+  addCategoryRule(body: CategoryRuleInput): Promise<{ id: number }> {
     return request("/api/settings/category-rules", {
       method: "POST",
       body: JSON.stringify(body),
@@ -383,7 +476,7 @@ export const api = {
   },
   updateCategoryRule(
     id: number,
-    body: Omit<CategoryRule, "id">,
+    body: CategoryRuleInput,
   ): Promise<{ ok: true }> {
     return request(`/api/settings/category-rules/${id}`, {
       method: "PATCH",

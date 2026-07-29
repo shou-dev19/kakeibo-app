@@ -7,14 +7,46 @@ import type {
   CsvFormat,
   ExcludedCategory,
   ExclusionScope,
+  Owner,
+  OwnerScope,
   SecuritiesBalance,
   SplitRule,
   Transaction,
 } from "../../shared/types";
 
+/**
+ * Build the owner condition for a read query. `'all'` (夫婦合算) adds nothing,
+ * so callers can splice the result into any WHERE clause unconditionally.
+ */
+function ownerCondition(
+  scope: OwnerScope,
+  column = "owner",
+): { conds: string[]; binds: unknown[] } {
+  if (scope === "all") return { conds: [], binds: [] };
+  return { conds: [`${column} = ?`], binds: [scope] };
+}
+
+/** Same as `ownerCondition` but rendered as a leading `WHERE`/`AND` fragment. */
+function ownerClause(scope: OwnerScope, keyword: "WHERE" | "AND"): string {
+  return scope === "all" ? "" : ` ${keyword} owner = ?`;
+}
+
+/** Bindings that pair with `ownerClause`. */
+function ownerBinds(scope: OwnerScope): unknown[] {
+  return scope === "all" ? [] : [scope];
+}
+
 // --- Settings: categories -------------------------------------------------
 
-/** Return every non-blank category name currently stored by the application. */
+/**
+ * Return every non-blank category name currently stored by the application.
+ *
+ * Deliberately NOT scoped by owner. Classification *rules* are per-user, but the
+ * category *vocabulary* is shared: excluded categories and the combined reports
+ * both match on category name, so letting the two users' names drift apart would
+ * make combined reports unreadable. Sourcing the list from both users means a
+ * category one of them invents shows up in the other's pickers automatically.
+ */
 export async function getCategories(db: D1Database): Promise<string[]> {
   const { results } = await db
     .prepare(
@@ -36,11 +68,20 @@ export async function getCategories(db: D1Database): Promise<string[]> {
 
 // --- Settings: category rules ---------------------------------------------
 
-export async function getCategoryRules(db: D1Database): Promise<CategoryRule[]> {
+/**
+ * Category rules are always read for exactly one user — never combined. Import
+ * classification, the settings screen and bulk re-categorization must all see
+ * only the acting user's rules.
+ */
+export async function getCategoryRules(
+  db: D1Database,
+  owner: Owner,
+): Promise<CategoryRule[]> {
   const { results } = await db
     .prepare(
-      "SELECT id, keyword, institution, category, priority FROM category_rules ORDER BY priority ASC, id ASC",
+      "SELECT id, owner, keyword, institution, category, priority FROM category_rules WHERE owner = ? ORDER BY priority ASC, id ASC",
     )
+    .bind(owner)
     .all<CategoryRule>();
   return results;
 }
@@ -51,28 +92,42 @@ export async function insertCategoryRule(
 ): Promise<number> {
   const res = await db
     .prepare(
-      "INSERT INTO category_rules (keyword, institution, category, priority) VALUES (?, ?, ?, ?)",
+      "INSERT INTO category_rules (owner, keyword, institution, category, priority) VALUES (?, ?, ?, ?, ?)",
     )
-    .bind(rule.keyword, rule.institution, rule.category, rule.priority)
+    .bind(rule.owner, rule.keyword, rule.institution, rule.category, rule.priority)
     .run();
   return res.meta.last_row_id as number;
 }
 
+/**
+ * Update/delete carry `owner` in the WHERE clause, so passing another user's
+ * rule id is a silent no-op rather than a cross-user write.
+ */
 export async function updateCategoryRule(
   db: D1Database,
   id: number,
-  rule: Omit<CategoryRule, "id">,
-): Promise<void> {
-  await db
+  owner: Owner,
+  rule: Omit<CategoryRule, "id" | "owner">,
+): Promise<boolean> {
+  const res = await db
     .prepare(
-      "UPDATE category_rules SET keyword = ?, institution = ?, category = ?, priority = ? WHERE id = ?",
+      "UPDATE category_rules SET keyword = ?, institution = ?, category = ?, priority = ? WHERE id = ? AND owner = ?",
     )
-    .bind(rule.keyword, rule.institution, rule.category, rule.priority, id)
+    .bind(rule.keyword, rule.institution, rule.category, rule.priority, id, owner)
     .run();
+  return (res.meta.changes ?? 0) > 0;
 }
 
-export async function deleteCategoryRule(db: D1Database, id: number): Promise<void> {
-  await db.prepare("DELETE FROM category_rules WHERE id = ?").bind(id).run();
+export async function deleteCategoryRule(
+  db: D1Database,
+  id: number,
+  owner: Owner,
+): Promise<boolean> {
+  const res = await db
+    .prepare("DELETE FROM category_rules WHERE id = ? AND owner = ?")
+    .bind(id, owner)
+    .run();
+  return (res.meta.changes ?? 0) > 0;
 }
 
 // --- Settings: CSV formats -------------------------------------------------
@@ -223,9 +278,18 @@ export async function deleteExcludedCategory(
 
 // --- Securities ------------------------------------------------------------
 
-export async function getSecurities(db: D1Database): Promise<SecuritiesBalance[]> {
+export async function getSecurities(
+  db: D1Database,
+  scope: OwnerScope = "all",
+): Promise<SecuritiesBalance[]> {
   const { results } = await db
-    .prepare("SELECT id, date, brokerage, value FROM securities_balances ORDER BY date ASC, id ASC")
+    .prepare(
+      `SELECT id, owner, date, brokerage, value FROM securities_balances${ownerClause(
+        scope,
+        "WHERE",
+      )} ORDER BY date ASC, id ASC`,
+    )
+    .bind(...ownerBinds(scope))
     .all<SecuritiesBalance>();
   return results;
 }
@@ -235,19 +299,32 @@ export async function insertSecurity(
   s: Omit<SecuritiesBalance, "id">,
 ): Promise<number> {
   const res = await db
-    .prepare("INSERT INTO securities_balances (date, brokerage, value) VALUES (?, ?, ?)")
-    .bind(s.date, s.brokerage, s.value)
+    .prepare(
+      "INSERT INTO securities_balances (owner, date, brokerage, value) VALUES (?, ?, ?, ?)",
+    )
+    .bind(s.owner, s.date, s.brokerage, s.value)
     .run();
   return res.meta.last_row_id as number;
 }
 
-export async function deleteSecurity(db: D1Database, id: number): Promise<void> {
-  await db.prepare("DELETE FROM securities_balances WHERE id = ?").bind(id).run();
+/** Scoped to the owner so one user cannot delete the other's balance entries. */
+export async function deleteSecurity(
+  db: D1Database,
+  id: number,
+  owner: Owner,
+): Promise<boolean> {
+  const res = await db
+    .prepare("DELETE FROM securities_balances WHERE id = ? AND owner = ?")
+    .bind(id, owner)
+    .run();
+  return (res.meta.changes ?? 0) > 0;
 }
 
 // --- Transactions ----------------------------------------------------------
 
 export interface TransactionFilter {
+  /** 読み取りスコープ。未指定は 'all' (夫婦合算)。 */
+  owner?: OwnerScope;
   year?: number;
   month?: number;
   category?: string;
@@ -269,7 +346,9 @@ export async function getTransactionInstitutionsForMonth(
   db: D1Database,
   year: number,
   month: number,
+  scope: OwnerScope = "all",
 ): Promise<string[]> {
+  const owner = ownerCondition(scope);
   const { results } = await db
     .prepare(
       `SELECT DISTINCT institution
@@ -277,9 +356,10 @@ export async function getTransactionInstitutionsForMonth(
        WHERE date LIKE ?
          AND institution IS NOT NULL
          AND TRIM(institution) <> ''
+         ${owner.conds.map((cond) => `AND ${cond}`).join(" ")}
        ORDER BY institution ASC`,
     )
-    .bind(`${year}-${String(month).padStart(2, "0")}-%`)
+    .bind(`${year}-${String(month).padStart(2, "0")}-%`, ...owner.binds)
     .all<{ institution: string }>();
   return results.map((row) => row.institution);
 }
@@ -289,8 +369,9 @@ function buildTransactionWhere(filter: TransactionFilter): {
   clause: string;
   binds: unknown[];
 } {
-  const conds: string[] = [];
-  const binds: unknown[] = [];
+  const owner = ownerCondition(filter.owner ?? "all");
+  const conds: string[] = [...owner.conds];
+  const binds: unknown[] = [...owner.binds];
 
   if (filter.year != null && filter.month != null) {
     conds.push("date LIKE ?");
@@ -332,7 +413,7 @@ export async function listTransactions(
 
   const { results } = await db
     .prepare(
-      `SELECT id, date, description, amount, type, institution, category, category_locked, memo, balance, import_hash, created_at
+      `SELECT ${TRANSACTION_COLUMNS}
        FROM transactions ${clause}
        ORDER BY date DESC, id DESC
        LIMIT ? OFFSET ?`,
@@ -343,12 +424,22 @@ export async function listTransactions(
   return { items: results, total, limit, offset };
 }
 
-/** Fetch all transactions (for reports), ordered by date/id ascending. */
-export async function getAllTransactions(db: D1Database): Promise<Transaction[]> {
+const TRANSACTION_COLUMNS =
+  "id, owner, date, description, amount, type, institution, category, category_locked, memo, balance, import_hash, created_at";
+
+/** Fetch transactions in the given scope (for reports), ordered by date/id. */
+export async function getAllTransactions(
+  db: D1Database,
+  scope: OwnerScope = "all",
+): Promise<Transaction[]> {
   const { results } = await db
     .prepare(
-      "SELECT id, date, description, amount, type, institution, category, category_locked, memo, balance, import_hash, created_at FROM transactions ORDER BY date ASC, id ASC",
+      `SELECT ${TRANSACTION_COLUMNS} FROM transactions${ownerClause(
+        scope,
+        "WHERE",
+      )} ORDER BY date ASC, id ASC`,
     )
+    .bind(...ownerBinds(scope))
     .all<Transaction>();
   return results;
 }
@@ -357,13 +448,15 @@ export async function getTransactionsForMonth(
   db: D1Database,
   year: number,
   month: number,
+  scope: OwnerScope = "all",
 ): Promise<Transaction[]> {
   const { results } = await db
     .prepare(
-      `SELECT id, date, description, amount, type, institution, category, category_locked, memo, balance, import_hash, created_at
-       FROM transactions WHERE date LIKE ? ORDER BY date ASC, id ASC`,
+      `SELECT ${TRANSACTION_COLUMNS}
+       FROM transactions WHERE date LIKE ?${ownerClause(scope, "AND")}
+       ORDER BY date ASC, id ASC`,
     )
-    .bind(`${year}-${String(month).padStart(2, "0")}-%`)
+    .bind(`${year}-${String(month).padStart(2, "0")}-%`, ...ownerBinds(scope))
     .all<Transaction>();
   return results;
 }
@@ -373,40 +466,46 @@ export async function getTransactionById(
   id: number,
 ): Promise<Transaction | null> {
   return db
-    .prepare(
-      `SELECT id, date, description, amount, type, institution, category, category_locked, memo, balance, import_hash, created_at
-       FROM transactions WHERE id = ?`,
-    )
+    .prepare(`SELECT ${TRANSACTION_COLUMNS} FROM transactions WHERE id = ?`)
     .bind(id)
     .first<Transaction>();
 }
 
+/**
+ * How many of the owner's transactions a prospective category rule would match.
+ * Scoped by owner because the rule being previewed only ever belongs to (and
+ * only ever affects) that one user.
+ */
 export async function countTransactionsMatchingCategoryRule(
   db: D1Database,
+  owner: Owner,
   keyword: string,
   institution: string | null,
 ): Promise<number> {
   const institutionClause = institution == null ? "" : " AND institution = ?";
-  const binds = institution == null ? [keyword] : [keyword, institution];
+  const binds =
+    institution == null ? [owner, keyword] : [owner, keyword, institution];
   const row = await db
     .prepare(
       `SELECT COUNT(*) AS count FROM transactions
-       WHERE instr(description, ?) > 0${institutionClause}`,
+       WHERE owner = ? AND instr(description, ?) > 0${institutionClause}`,
     )
     .bind(...binds)
     .first<{ count: number }>();
   return row?.count ?? 0;
 }
 
+/** Owner-scoped so one user's id cannot be used to write the other's row. */
 export async function updateTransactionFields(
   db: D1Database,
   id: number,
+  owner: Owner,
   fields: {
     category?: string | null;
     category_locked?: number;
     memo?: string | null;
   },
-): Promise<void> {
+): Promise<boolean> {
   const sets: string[] = [];
   const binds: unknown[] = [];
   if (Object.prototype.hasOwnProperty.call(fields, "category")) {
@@ -421,16 +520,27 @@ export async function updateTransactionFields(
     sets.push("memo = ?");
     binds.push(fields.memo ?? null);
   }
-  if (sets.length === 0) return;
-  binds.push(id);
-  await db
-    .prepare(`UPDATE transactions SET ${sets.join(", ")} WHERE id = ?`)
+  if (sets.length === 0) return false;
+  binds.push(id, owner);
+  const res = await db
+    .prepare(
+      `UPDATE transactions SET ${sets.join(", ")} WHERE id = ? AND owner = ?`,
+    )
     .bind(...binds)
     .run();
+  return (res.meta.changes ?? 0) > 0;
 }
 
-export async function deleteTransaction(db: D1Database, id: number): Promise<void> {
-  await db.prepare("DELETE FROM transactions WHERE id = ?").bind(id).run();
+export async function deleteTransaction(
+  db: D1Database,
+  id: number,
+  owner: Owner,
+): Promise<boolean> {
+  const res = await db
+    .prepare("DELETE FROM transactions WHERE id = ? AND owner = ?")
+    .bind(id, owner)
+    .run();
+  return (res.meta.changes ?? 0) > 0;
 }
 
 export async function updateTransactionCategory(
@@ -444,17 +554,24 @@ export async function updateTransactionCategory(
     .run();
 }
 
-/** Fetch the set of all existing import_hash values (for preview dup checks). */
+/**
+ * Fetch the owner's existing import_hash values (for preview dup checks).
+ * Scoped by owner to match the UNIQUE(owner, import_hash) constraint — the other
+ * user's identical-looking rows must not be reported as duplicates.
+ */
 export async function getExistingImportHashes(
   db: D1Database,
+  owner: Owner,
 ): Promise<Set<string>> {
   const { results } = await db
-    .prepare("SELECT import_hash FROM transactions")
+    .prepare("SELECT import_hash FROM transactions WHERE owner = ?")
+    .bind(owner)
     .all<{ import_hash: string }>();
   return new Set(results.map((r) => r.import_hash));
 }
 
 export interface InsertableTransaction {
+  owner: Owner;
   date: string;
   description: string;
   amount: number;
@@ -478,10 +595,11 @@ export async function insertTransactionIgnoreDup(
   const res = await db
     .prepare(
       `INSERT OR IGNORE INTO transactions
-        (date, description, amount, type, institution, category, memo, balance, import_hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (owner, date, description, amount, type, institution, category, memo, balance, import_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
+      tx.owner,
       tx.date,
       tx.description,
       tx.amount,

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, type CategoryRule } from "../../lib/api";
 import { useAsync, type AsyncState } from "../../hooks/useAsync";
 import { useToast } from "../../components/Toast";
+import { useMe } from "../../hooks/useMe";
 import { Modal } from "../../components/Modal";
 import {
   Button,
@@ -32,9 +33,15 @@ export function canManageCategoryRules(
   );
 }
 
-/** 分類ルール（キーワード / 金融機関 / カテゴリ / 優先度）の一覧 + CRUD。 */
+/**
+ * 分類ルール（キーワード / 金融機関 / カテゴリ / 優先度）の一覧 + CRUD。
+ *
+ * 表示・編集ともログイン利用者のルールのみ。サーバがログインから owner を決める
+ * ので、クライアントからは相手のルールを指定する手段がない。
+ */
 export function CategoryRulesSection() {
   const toast = useToast();
+  const me = useMe();
   const rules = useAsync(() => api.getCategoryRules(), []);
   const categories = useAsync(() => api.getCategories(), []);
   const [editing, setEditing] = useState<CategoryRule | "new" | null>(null);
@@ -43,7 +50,14 @@ export function CategoryRulesSection() {
   return (
     <Card className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700">分類ルール</h2>
+        <div>
+          <h2 className="text-sm font-semibold text-gray-700">
+            分類ルール{me ? `（${me.label}）` : ""}
+          </h2>
+          <p className="text-xs text-gray-500">
+            あなたの明細にのみ適用されます。
+          </p>
+        </div>
         <Button
           variant="ghost"
           onClick={() => setEditing("new")}

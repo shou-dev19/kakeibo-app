@@ -1,6 +1,9 @@
 import { TabBar } from "./components/TabBar";
 import { NavProvider, useNav } from "./nav";
 import { ToastProvider } from "./components/Toast";
+import { MeContext } from "./hooks/useMe";
+import { useAsync } from "./hooks/useAsync";
+import { api } from "./lib/api";
 import { TABS } from "./tabs";
 
 function Shell() {
@@ -15,11 +18,17 @@ function Shell() {
 }
 
 export function App() {
+  // Fetched once at startup: screens need to know who is logged in to label the
+  // owner tabs and to decide which transactions are editable.
+  const me = useAsync(() => api.getMe(), []);
+
   return (
     <ToastProvider>
-      <NavProvider>
-        <Shell />
-      </NavProvider>
+      <MeContext.Provider value={me.data}>
+        <NavProvider>
+          <Shell />
+        </NavProvider>
+      </MeContext.Provider>
     </ToastProvider>
   );
 }

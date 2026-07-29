@@ -1,34 +1,17 @@
 import { useState } from "react";
-import { api } from "../lib/api";
-import { useToast } from "../components/Toast";
+import { useMe } from "../hooks/useMe";
 import { Button, Card, Page } from "../components/ui";
 import { ConfirmDialog } from "../components/Modal";
 import { CategoryRulesSection } from "./settings/CategoryRulesSection";
 import { CsvFormatsSection } from "./settings/CsvFormatsSection";
+import { RecategorizeSection } from "./settings/RecategorizeSection";
 import { SplitRulesSection } from "./settings/SplitRulesSection";
 import { ExcludedCategoriesSection } from "./settings/ExcludedCategoriesSection";
 
 /** 設定: 各種ルール / 全件再分類 / アカウント操作。 */
 export function SettingsPage() {
-  const toast = useToast();
-  const [confirming, setConfirming] = useState(false);
+  const me = useMe();
   const [confirmingLogout, setConfirmingLogout] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  const recategorize = async () => {
-    setBusy(true);
-    try {
-      const res = await api.recategorizeAll();
-      toast.success(
-        `再分類完了: ${res.total}件中 ${res.updated}件を更新、手動固定 ${res.skippedLocked}件をスキップしました`,
-      );
-      setConfirming(false);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "再分類に失敗しました");
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const logout = () => {
     window.location.assign("/cdn-cgi/access/logout");
@@ -36,15 +19,13 @@ export function SettingsPage() {
 
   return (
     <Page title="設定">
-      <Card className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-700">全件再分類</h2>
-          <p className="text-xs text-gray-500">
-            現在の分類ルールを、手動固定されていない全取引に再適用します。
-          </p>
-        </div>
-        <Button onClick={() => setConfirming(true)}>実行</Button>
-      </Card>
+      {me && (
+        <p className="-mt-2 text-sm text-gray-500">
+          {me.label}としてログイン中
+        </p>
+      )}
+
+      <RecategorizeSection />
 
       <div className="grid gap-4 md:grid-cols-2">
         <CategoryRulesSection />
@@ -64,17 +45,6 @@ export function SettingsPage() {
           ログアウト
         </Button>
       </Card>
-
-      {confirming && (
-        <ConfirmDialog
-          title="全件再分類"
-          message="手動固定されていない全ての取引に、現在の分類ルールを再適用します。よろしいですか？"
-          confirmLabel="再分類する"
-          busy={busy}
-          onConfirm={recategorize}
-          onCancel={() => setConfirming(false)}
-        />
-      )}
 
       {confirmingLogout && (
         <ConfirmDialog

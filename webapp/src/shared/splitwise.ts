@@ -1,5 +1,16 @@
 // Split-payment (割り勘) calculation. Pure functions, no runtime/D1 deps.
 //
+// `rate` means "妻の負担率 (%)" and is independent of who actually paid. The GAS
+// original framed this as "夫視点での妻への請求額", which only worked while the
+// husband was the sole importer. Now that both spouses' transactions are stored,
+// the same rules are read objectively: every eligible expense is split into
+// 夫負担額 / 妻負担額 regardless of whose card it went through. The stored rates
+// already meant "the partner's (= the wife's) share", so no data migration is
+// needed — only the framing changes.
+//
+// 夫負担額 is derived by subtraction (総額 − 妻負担額) so that the two shares
+// always add back up to the total, whatever the rounding.
+//
 // Ported from Service_SplitwiseCalculator.gs. The GAS version evaluated rules
 // in a fixed 5-stage order:
 //   1. full-charge institutions   (部分一致, rate 100)
@@ -23,10 +34,12 @@
 // the web app's pre-priority behavior. Users can explicitly override it by
 // assigning a smaller priority to the rule that should win.
 
-import type { SplitRule, TransactionType } from "./types";
+import type { Owner, SplitRule, TransactionType } from "./types";
 
 /** Minimal transaction shape the splitwise calc needs. */
 export interface SplitwiseTransaction {
+  /** 実際に支払った利用者。精算額の算出に使う。 */
+  owner: Owner;
   date: string;
   description: string;
   amount: number;
@@ -38,36 +51,51 @@ export interface SplitwiseTransaction {
 const TRANSFER_CATEGORY = "振替";
 
 export interface SplitwiseLineItem extends SplitwiseTransaction {
-  /** The rate (%) applied to this transaction. */
+  /** 妻の負担率 (%). */
   rate: number;
   /**
-   * Display-only per-line share = Math.round(amount * rate / 100).
-   * NOTE: totalBilled and subtotal.billed are NOT the sum of these rounded
+   * Display-only per-line wife's share = Math.round(amount * rate / 100).
+   * NOTE: wifeShare and subtotal.wifeShare are NOT the sum of these rounded
    * line values. To match the GAS version exactly, the totals apply the rate
    * to the rate-grouped amount subtotal (unrounded); rounding each line first
    * would drift by a few yen. Use this field for display only.
    */
-  billed: number;
+  wifeShare: number;
 }
 
 export interface SplitwiseRateSubtotal {
   rate: number;
   /** Sum of raw amounts matched at this rate. */
   amount: number;
-  /** Billed share for this rate = amount * rate / 100 (unrounded, matches GAS). */
-  billed: number;
+  /** 妻負担額 = amount * rate / 100 (unrounded, matches GAS). */
+  wifeShare: number;
+  /** 夫負担額 = amount - wifeShare. */
+  husbandShare: number;
   count: number;
 }
 
 export interface SplitwiseResult {
   year: number;
   month: number;
+  /** 割り勘対象 (ルールに一致した支出) の総額。 */
+  totalAmount: number;
   /**
-   * Total billed to the partner = sum over rates of (amount * rate / 100),
-   * unrounded. Mirrors the GAS `splitTotal*0.5 + specialSplitTotal*0.31 +
-   * fullTotal` so migration verification matches to the yen (incl. fractions).
+   * 妻負担額 = sum over rates of (amount * rate / 100), unrounded. Mirrors the
+   * GAS `splitTotal*0.5 + specialSplitTotal*0.31 + fullTotal`, which was framed
+   * as "妻への請求額" — the same number, now named for what it is.
    */
-  totalBilled: number;
+  wifeShare: number;
+  /** 夫負担額 = totalAmount - wifeShare (引き算なので合計が必ず一致する)。 */
+  husbandShare: number;
+  /** 夫が実際に立て替えた額 (owner='husband' の対象明細の合計)。 */
+  husbandPaid: number;
+  /** 妻が実際に立て替えた額。 */
+  wifePaid: number;
+  /**
+   * 精算額 = wifeShare - wifePaid。
+   * 正なら妻から夫へ、負なら夫から妻へ支払う。
+   */
+  settlement: number;
   /** Per-rate subtotals, sorted by rate descending. */
   subtotals: SplitwiseRateSubtotal[];
   /** All matched transactions with their applied rate. */
@@ -127,12 +155,14 @@ export function matchEligibleSplitRule(
 }
 
 /**
- * Compute the split-payment result for a month's transactions.
- * Only type='支出' with category !== '振替' are eligible.
+ * Compute the split-payment result for a month's transactions, across BOTH
+ * users. Only type='支出' with category !== '振替' that match a rule are
+ * eligible; anything else is treated as that person's own personal spending and
+ * stays out of the split entirely.
  *
  * To match the GAS version to the yen, totals are computed by applying the rate
  * to the rate-grouped amount subtotal (unrounded), not by summing rounded
- * per-line shares. Each line's `billed` (Math.round) is display-only.
+ * per-line shares. Each line's `wifeShare` (Math.round) is display-only.
  */
 export function calculateSplitwise(
   txs: SplitwiseTransaction[],
@@ -143,6 +173,9 @@ export function calculateSplitwise(
   const sorted = sortSplitRules(rules);
   const items: SplitwiseLineItem[] = [];
   const subtotalMap = new Map<number, SplitwiseRateSubtotal>();
+  let totalAmount = 0;
+  let husbandPaid = 0;
+  let wifePaid = 0;
 
   for (const tx of txs) {
     const rule = matchEligibleSplitRule(tx, sorted);
@@ -150,13 +183,17 @@ export function calculateSplitwise(
 
     const rate = rule.rate;
     // Display-only per-line share; totals are derived from subtotals below.
-    const billed = Math.round((tx.amount * rate) / 100);
+    const wifeShare = Math.round((tx.amount * rate) / 100);
 
-    items.push({ ...tx, rate, billed });
+    items.push({ ...tx, rate, wifeShare });
+
+    totalAmount += tx.amount;
+    if (tx.owner === "wife") wifePaid += tx.amount;
+    else husbandPaid += tx.amount;
 
     let sub = subtotalMap.get(rate);
     if (!sub) {
-      sub = { rate, amount: 0, billed: 0, count: 0 };
+      sub = { rate, amount: 0, wifeShare: 0, husbandShare: 0, count: 0 };
       subtotalMap.set(rate, sub);
     }
     sub.amount += tx.amount;
@@ -165,15 +202,30 @@ export function calculateSplitwise(
 
   // Apply the rate to each grouped amount subtotal (unrounded), matching GAS's
   // `splitTotal*0.5 + specialSplitTotal*0.31 + fullTotal`.
-  let totalBilled = 0;
+  let wifeShare = 0;
   for (const sub of subtotalMap.values()) {
-    sub.billed = (sub.amount * sub.rate) / 100;
-    totalBilled += sub.billed;
+    sub.wifeShare = (sub.amount * sub.rate) / 100;
+    sub.husbandShare = sub.amount - sub.wifeShare;
+    wifeShare += sub.wifeShare;
   }
+  // Subtraction, not a second rate application: guarantees the two shares add
+  // back up to totalAmount exactly, however the fractions fall.
+  const husbandShare = totalAmount - wifeShare;
 
   const subtotals = [...subtotalMap.values()].sort((a, b) => b.rate - a.rate);
 
-  return { year, month, totalBilled, subtotals, items };
+  return {
+    year,
+    month,
+    totalAmount,
+    wifeShare,
+    husbandShare,
+    husbandPaid,
+    wifePaid,
+    settlement: wifeShare - wifePaid,
+    subtotals,
+    items,
+  };
 }
 
 export type { TransactionType };
