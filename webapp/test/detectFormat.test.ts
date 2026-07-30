@@ -16,7 +16,7 @@ function format(overrides: Partial<CsvFormat> = {}): CsvFormat {
     income_col: null,
     balance_col: null,
     header_rows: 1,
-    encoding: "UTF-8",
+    encodings: ["UTF-8"],
     header_signature: "日付,内容,金額",
     expected_columns: 3,
     ...overrides,

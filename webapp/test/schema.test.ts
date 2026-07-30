@@ -39,6 +39,10 @@ const recategorizeHistorySql = readFileSync(
   fileURLToPath(new URL("../migrations/0010_recategorize_history.sql", import.meta.url)),
   "utf8",
 );
+const csvFormatEncodingsSql = readFileSync(
+  fileURLToPath(new URL("../migrations/0011_csv_format_encodings.sql", import.meta.url)),
+  "utf8",
+);
 
 /** Every table in TABLE_NAMES must be created by *some* migration. */
 const allMigrationSql = [
@@ -50,6 +54,7 @@ const allMigrationSql = [
   securitiesOwnerSql,
   categoryRulesOwnerSql,
   recategorizeHistorySql,
+  csvFormatEncodingsSql,
 ].join("\n");
 
 describe("initial migration schema", () => {
@@ -117,6 +122,33 @@ describe("CSV format detection migration", () => {
       expect(detectionSql).toContain("WHERE name = '" + name + "'");
     }
     expect(detectionSql).toMatch(/expected_columns = 13,\s*header_rows = 0/);
+  });
+});
+
+describe("CSV format encodings migration", () => {
+  it("adds the JSON text column and initializes every row from legacy encoding", () => {
+    expect(csvFormatEncodingsSql).toMatch(/ADD COLUMN encodings TEXT/);
+    expect(csvFormatEncodingsSql).toMatch(
+      /UPDATE csv_formats\s+SET encodings = json_array\(encoding\)/,
+    );
+  });
+
+  it("enables exactly the five approved formats in Shift_JIS-first order", () => {
+    expect(csvFormatEncodingsSql).toContain(
+      `encodings = '["Shift_JIS","UTF-8"]'`,
+    );
+    const names = [
+      "JCBW",
+      "VIEWカード",
+      "イオンカード",
+      "イオン銀行",
+      "住信SBIネット銀行",
+    ];
+    for (const name of names) expect(csvFormatEncodingsSql).toContain(`'${name}'`);
+    expect(csvFormatEncodingsSql).not.toContain("'三井住友カード'");
+    expect(csvFormatEncodingsSql).not.toContain("'楽天カード'");
+    expect(csvFormatEncodingsSql).not.toContain("'東急カード'");
+    expect(csvFormatEncodingsSql).not.toContain("'SBI新生銀行'");
   });
 });
 

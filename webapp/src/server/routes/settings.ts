@@ -118,11 +118,23 @@ function parseCsvFormatBody(body: Record<string, unknown>) {
   const expectedColumns = toNullableInt(body.expected_columns);
   const headerRows = toNullableInt(body.header_rows) ?? 1;
   const headerSignature = toNullableString(body.header_signature);
+  const encodings = body.encodings;
   if (typeof body.name !== "string" || body.name.trim() === "") return null;
   if (dateCol == null || descCol == null) return null;
   if (!Number.isInteger(Number(body.expected_columns))) return null;
   if (!Number.isInteger(Number(body.header_rows ?? 1))) return null;
   if (expectedColumns == null || expectedColumns < 1 || headerRows < 0) return null;
+  if (
+    !Array.isArray(encodings) ||
+    encodings.length === 0 ||
+    !encodings.every(
+      (encoding): encoding is string =>
+        encoding === "UTF-8" || encoding === "Shift_JIS",
+    ) ||
+    new Set(encodings).size !== encodings.length
+  ) {
+    return null;
+  }
   if (headerSignature != null) {
     if (headerRows < 1 || parseCsvRows(headerSignature).length !== 1) return null;
   }
@@ -134,9 +146,7 @@ function parseCsvFormatBody(body: Record<string, unknown>) {
     income_col: toNullableInt(body.income_col),
     balance_col: toNullableInt(body.balance_col),
     header_rows: headerRows,
-    encoding: typeof body.encoding === "string" && body.encoding.trim() !== ""
-      ? body.encoding.trim()
-      : "UTF-8",
+    encodings,
     header_signature: headerSignature,
     expected_columns: expectedColumns,
   };

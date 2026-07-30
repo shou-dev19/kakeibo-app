@@ -81,7 +81,7 @@ export interface CsvFormat {
   income_col: number | null;
   balance_col: number | null;
   header_rows: number;
-  encoding: string;
+  encodings: string[];
   header_signature: string | null;
   expected_columns: number | null;
 }

@@ -21,10 +21,20 @@ type Draft = {
   income_col: string;
   balance_col: string;
   header_rows: string;
-  encoding: string;
+  encodings: string[];
   header_signature: string;
   expected_columns: string;
 };
+
+export const CSV_ENCODINGS = ["Shift_JIS", "UTF-8"] as const;
+
+export function hasSelectedEncoding(encodings: string[]): boolean {
+  return encodings.length > 0;
+}
+
+export function formatEncodingLabel(encodings: string[]): string {
+  return encodings.join("・");
+}
 
 const emptyDraft: Draft = {
   name: "",
@@ -34,7 +44,7 @@ const emptyDraft: Draft = {
   income_col: "",
   balance_col: "",
   header_rows: "1",
-  encoding: "UTF-8",
+  encodings: ["UTF-8"],
   header_signature: "",
   expected_columns: "3",
 };
@@ -74,7 +84,7 @@ export function CsvFormatsSection() {
               >
                 <span className="text-sm text-gray-800">{f.name}</span>
                 <span className="text-xs text-gray-400">
-                  {f.encoding}・日{f.date_col}/名{f.desc_col}
+                  {formatEncodingLabel(f.encodings)}・日{f.date_col}/名{f.desc_col}
                   {f.expense_col ? `/出${f.expense_col}` : ""}
                   {f.income_col ? `/入${f.income_col}` : ""}
                 </span>
@@ -99,7 +109,7 @@ export function CsvFormatsSection() {
   );
 }
 
-function FormatModal({
+export function FormatModal({
   format,
   onClose,
   onDone,
@@ -120,7 +130,7 @@ function FormatModal({
           income_col: format.income_col == null ? "" : String(format.income_col),
           balance_col: format.balance_col == null ? "" : String(format.balance_col),
           header_rows: String(format.header_rows),
-          encoding: format.encoding,
+          encodings: format.encodings,
           header_signature: format.header_signature ?? "",
           expected_columns: format.expected_columns == null ? "" : String(format.expected_columns),
         }
@@ -133,6 +143,10 @@ function FormatModal({
   const save = async () => {
     if (draft.name.trim() === "") {
       onToast.error("フォーマット名は必須です");
+      return;
+    }
+    if (!hasSelectedEncoding(draft.encodings)) {
+      onToast.error("文字コードを1つ以上選択してください");
       return;
     }
     const dateCol = num(draft.date_col);
@@ -151,7 +165,7 @@ function FormatModal({
       income_col: num(draft.income_col),
       balance_col: num(draft.balance_col),
       header_rows: num(draft.header_rows) ?? 1,
-      encoding: draft.encoding.trim() || "UTF-8",
+      encodings: draft.encodings,
       header_signature: draft.header_signature.trim() || null,
       expected_columns: expectedColumns,
     };
@@ -182,6 +196,14 @@ function FormatModal({
   };
 
   const set = (k: keyof Draft, v: string) => setDraft({ ...draft, [k]: v });
+  const toggleEncoding = (encoding: string) => {
+    setDraft({
+      ...draft,
+      encodings: draft.encodings.includes(encoding)
+        ? draft.encodings.filter((candidate) => candidate !== encoding)
+        : [...draft.encodings, encoding],
+    });
+  };
 
   return (
     <Modal title={format ? "フォーマットを編集" : "フォーマットを追加"} onClose={onClose}>
@@ -216,16 +238,29 @@ function FormatModal({
             <NumInput value={draft.header_rows} onChange={(v) => set("header_rows", v)} />
           </Field>
         </div>
-        <Field label="エンコーディング">
-          <select
-            value={draft.encoding}
-            onChange={(e) => set("encoding", e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+        <div>
+          <span className="mb-1 block text-xs font-medium text-gray-600">
+            エンコーディング
+          </span>
+          <div
+            role="group"
+            aria-label="エンコーディング"
+            className="flex gap-4 rounded-md border border-gray-300 px-3 py-2"
           >
-            <option value="UTF-8">UTF-8</option>
-            <option value="Shift_JIS">Shift_JIS</option>
-          </select>
-        </Field>
+            {CSV_ENCODINGS.map((encoding) => (
+              <label key={encoding} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  name="encodings"
+                  value={encoding}
+                  checked={draft.encodings.includes(encoding)}
+                  onChange={() => toggleEncoding(encoding)}
+                />
+                {encoding}
+              </label>
+            ))}
+          </div>
+        </div>
         <Field label="判定用ヘッダー署名（ヘッダーなしは空欄、可変セルは *）">
           <textarea
             value={draft.header_signature}

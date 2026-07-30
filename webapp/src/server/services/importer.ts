@@ -51,7 +51,66 @@ interface ResolvedFile {
   error: string | null;
 }
 
-/** Resolve a manual selection or evaluate each format with its own encoding. */
+type FormatEvaluation =
+  | {
+      kind: "eligible";
+      format: CsvFormat;
+      encoding: string;
+      text: string;
+      candidate: ReturnType<typeof evaluateFormat>;
+    }
+  | { kind: "decode_failed"; format: CsvFormat }
+  | { kind: "structure_failed"; format: CsvFormat }
+  | { kind: "ambiguous_encoding"; format: CsvFormat };
+
+/**
+ * Resolve all configured encodings for one logical format. Only structurally
+ * eligible decodes survive; equal decoded text is intentionally one result.
+ */
+export function evaluateFormatEncodings(
+  bytes: Uint8Array,
+  format: CsvFormat,
+): FormatEvaluation {
+  let decodedCount = 0;
+  const eligible: Array<{
+    encoding: string;
+    text: string;
+    candidate: ReturnType<typeof evaluateFormat>;
+  }> = [];
+
+  for (const encoding of format.encodings) {
+    let text: string;
+    try {
+      text = decodeCsvBytesStrict(bytes, encoding);
+      decodedCount += 1;
+    } catch {
+      continue;
+    }
+    const candidate = evaluateFormat(text, format);
+    if (candidate.eligible) eligible.push({ encoding, text, candidate });
+  }
+
+  if (decodedCount === 0) return { kind: "decode_failed", format };
+  if (eligible.length === 0) return { kind: "structure_failed", format };
+
+  const first = eligible[0];
+  if (eligible.some((entry) => entry.text !== first.text)) {
+    return { kind: "ambiguous_encoding", format };
+  }
+  return {
+    kind: "eligible",
+    format,
+    encoding: first.encoding,
+    text: first.text,
+    candidate: first.candidate,
+  };
+}
+
+function encodingNames(format: CsvFormat): string {
+  return format.encodings.join("・");
+}
+
+/** Resolve a manual selection or evaluate each logical format once. */
 function resolveFile(
   bytes: Uint8Array,
   formats: CsvFormat[],
@@ -67,43 +126,29 @@ function resolveFile(
         error: `定義されていないCSVフォーマットです: ${formatName}`,
       };
     }
-    try {
+    const evaluated = evaluateFormatEncodings(bytes, format);
+    if (evaluated.kind === "eligible") {
       return {
         format,
-        text: decodeCsvBytesStrict(bytes, format.encoding),
+        text: evaluated.text,
         confident: true,
         error: null,
       };
-    } catch (error) {
-      return {
-        format: null,
-        text: null,
-        confident: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
     }
+    const error = evaluated.kind === "decode_failed"
+      ? `CSVフォーマット「${format.name}」を設定された文字コード（${encodingNames(format)}）で読み取れませんでした。`
+      : evaluated.kind === "structure_failed"
+        ? `選択したCSVフォーマット「${format.name}」では有効な取引を読み取れませんでした。`
+        : `CSVフォーマット「${format.name}」の文字コードを一意に判定できませんでした。`;
+    return { format, text: null, confident: false, error };
   }
 
-  const decoded = new Map<string, string | null>();
-  const evaluated: Array<{
-    format: CsvFormat;
-    text: string;
-    candidate: ReturnType<typeof evaluateFormat>;
-  }> = [];
-
-  for (const format of formats) {
-    const encodingKey = format.encoding.trim().toLowerCase();
-    if (!decoded.has(encodingKey)) {
-      try {
-        decoded.set(encodingKey, decodeCsvBytesStrict(bytes, format.encoding));
-      } catch {
-        decoded.set(encodingKey, null);
-      }
-    }
-    const text = decoded.get(encodingKey);
-    if (text == null) continue;
-    evaluated.push({ format, text, candidate: evaluateFormat(text, format) });
-  }
+  const evaluated = formats
+    .map((format) => evaluateFormatEncodings(bytes, format))
+    .filter(
+      (entry): entry is Extract<FormatEvaluation, { kind: "eligible" }> =>
+        entry.kind === "eligible",
+    );
 
   const detection = selectFormat(evaluated.map((entry) => entry.candidate));
   if (!detection.best) {

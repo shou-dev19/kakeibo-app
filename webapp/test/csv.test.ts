@@ -12,7 +12,7 @@ function fmt(overrides: Partial<CsvFormat> = {}): CsvFormat {
     income_col: 4,
     balance_col: 5,
     header_rows: 1,
-    encoding: "UTF-8",
+    encodings: ["UTF-8"],
     header_signature: null,
     expected_columns: null,
     ...overrides,

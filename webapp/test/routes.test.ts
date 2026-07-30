@@ -403,7 +403,7 @@ describe("POST /api/settings/csv-formats", () => {
     income_col: null,
     balance_col: null,
     header_rows: 1,
-    encoding: "UTF-8",
+    encodings: ["Shift_JIS", "UTF-8"],
     header_signature: "日付,内容,金額",
     expected_columns: 3,
   };
@@ -415,6 +415,21 @@ describe("POST /api/settings/csv-formats", () => {
       env(makeDb([])),
     );
     expect(res.status).toBe(201);
+  });
+
+  it.each([
+    [{ ...valid, encodings: [] }],
+    [{ ...valid, encodings: ["UTF-8", "UTF-8"] }],
+    [{ ...valid, encodings: ["UTF-16"] }],
+    [{ ...valid, encodings: "UTF-8" }],
+    [Object.fromEntries(Object.entries(valid).filter(([key]) => key !== "encodings"))],
+  ])("rejects invalid encoding candidates", async (body) => {
+    const res = await app.request(
+      "/api/settings/csv-formats",
+      { method: "POST", body: JSON.stringify(body) },
+      env(makeDb([])),
+    );
+    expect(res.status).toBe(400);
   });
 
   it("rejects missing, fractional, or headerless-invalid detection metadata", async () => {

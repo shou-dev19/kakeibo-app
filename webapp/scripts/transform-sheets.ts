@@ -89,9 +89,18 @@ export interface CsvFormatRow {
   balance_col: number | null;
   header_rows: number;
   encoding: string;
+  encodings: string[];
   header_signature: string | null;
   expected_columns: number | null;
 }
+
+const MULTI_ENCODING_CSV_FORMATS = new Set([
+  "JCBW",
+  "VIEWカード",
+  "イオンカード",
+  "イオン銀行",
+  "住信SBIネット銀行",
+]);
 
 const CSV_FORMAT_DETECTION: Record<string, { header: string | null; columns: number }> = {
   "SBI新生銀行": { header: `"取引日","摘要","出金金額","入金金額","残高","メモ"`, columns: 6 },
@@ -255,6 +264,11 @@ export function transformCsvFormats(rows: string[][]): CsvFormatRow[] {
     const desc_col = toInt(cell(r, 2));
     if (date_col == null || desc_col == null) continue;
     const detection = CSV_FORMAT_DETECTION[name];
+    const sheetEncoding = cell(r, 7) || "UTF-8";
+    const encodings = MULTI_ENCODING_CSV_FORMATS.has(name)
+      ? ["Shift_JIS", "UTF-8"]
+      : [sheetEncoding];
+    const encoding = encodings[0];
     out.push({
       name,
       date_col,
@@ -263,7 +277,8 @@ export function transformCsvFormats(rows: string[][]): CsvFormatRow[] {
       income_col: toInt(cell(r, 4)),
       balance_col: toInt(cell(r, 5)),
       header_rows: name === "東急カード" ? 0 : (toInt(cell(r, 6)) ?? 1),
-      encoding: cell(r, 7) || "UTF-8",
+      encoding,
+      encodings,
       header_signature: detection?.header ?? null,
       expected_columns: detection?.columns ?? null,
     });

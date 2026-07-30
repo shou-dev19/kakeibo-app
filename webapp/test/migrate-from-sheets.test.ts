@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { parseCsvRows } from "../src/shared/csv";
 import {
   transformTransactions,
@@ -160,12 +162,54 @@ describe("transformCsvFormats", () => {
       balance_col: 5,
       header_rows: 1,
       encoding: "UTF-8",
+      encodings: ["UTF-8"],
       header_signature: `"取引日","摘要","出金金額","入金金額","残高","メモ"`,
       expected_columns: 6,
     });
     expect(out[1].income_col).toBeNull();
     expect(out[1].balance_col).toBeNull();
     expect(out[1].encoding).toBe("Shift_JIS");
+    expect(out[1].encodings).toEqual(["Shift_JIS"]);
+  });
+
+  it("restores both encodings for the five approved formats in Shift_JIS-first order", () => {
+    const names = [
+      "JCBW",
+      "VIEWカード",
+      "イオンカード",
+      "イオン銀行",
+      "住信SBIネット銀行",
+    ];
+    const rows = parseCsvRows(
+      [
+        "FormatName,DateColumn,DescriptionColumn,ExpenseColumn,IncomeColumn,BalanceColumn,HeaderRows,Encoding",
+        ...names.map((name) => `${name},1,2,3,,,1,UTF-8`),
+      ].join("\n"),
+    );
+
+    const out = transformCsvFormats(rows);
+    expect(out.map(({ name, encoding, encodings }) => ({
+      name,
+      encoding,
+      encodings,
+    }))).toEqual(
+      names.map((name) => ({
+        name,
+        encoding: "Shift_JIS",
+        encodings: ["Shift_JIS", "UTF-8"],
+      })),
+    );
+  });
+
+  it("keeps legacy encoding and generated encodings aligned in SQL", () => {
+    const source = readFileSync(
+      fileURLToPath(new URL("../scripts/migrate-from-sheets.ts", import.meta.url)),
+      "utf8",
+    );
+    expect(source).toContain(
+      '"header_rows", "encoding", "encodings", "header_signature"',
+    );
+    expect(source).toContain("f.encoding, JSON.stringify(f.encodings)");
   });
 });
 

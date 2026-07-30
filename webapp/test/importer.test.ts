@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { previewImports, runImports } from "../src/server/services/importer";
+import {
+  evaluateFormatEncodings,
+  previewImports,
+  runImports,
+} from "../src/server/services/importer";
 import type { CategoryRule, CsvFormat, Owner } from "../src/shared/types";
 
 /**
@@ -31,7 +35,13 @@ function makeFakeDb(opts: {
         },
         async all<T>() {
           if (sql.includes("FROM csv_formats")) {
-            return { results: opts.formats as unknown as T[] };
+            return {
+              results: opts.formats.map((format) => ({
+                ...format,
+                encoding: format.encodings[0],
+                encodings: JSON.stringify(format.encodings),
+              })) as unknown as T[],
+            };
           }
           if (sql.includes("FROM category_rules")) {
             const owner = binds[0];
@@ -85,7 +95,7 @@ const format: CsvFormat = {
   income_col: null,
   balance_col: null,
   header_rows: 1,
-  encoding: "UTF-8",
+  encodings: ["UTF-8"],
   header_signature: "日付,内容,金額",
   expected_columns: 3,
 };
@@ -98,6 +108,14 @@ const csv = ["日付,内容,金額", "2025/07/01,スーパーA,500", "2025/07/02
   "\n",
 );
 const b64 = (s: string) => btoa(unescape(encodeURIComponent(s)));
+const b64Bytes = (bytes: Uint8Array) => {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+};
+const utf8Bytes = (text: string) => new TextEncoder().encode(text);
+const shiftJisCsvBase64 =
+  "k/qVdCyT4JdlLIvginoKMjAyNi8wNy8wMSyJy4vzk1iV3EEsNTAwCjIwMjYvMDcvMDIsicuL85NYldxCLDEyMDA=";
 
 describe("runImports", () => {
   it("imports rows from a file and reports per-file counts", async () => {
@@ -175,6 +193,38 @@ describe("previewImports", () => {
     expect(p.count).toBe(2);
     expect(p.duplicateCount).toBe(2);
   });
+
+  it.each([
+    ["auto", undefined],
+    ["manual", format.name],
+  ])("imports UTF-8 with multiple candidates in %s mode", async (_mode, formatName) => {
+    const dual = { ...format, encodings: ["Shift_JIS", "UTF-8"] };
+    const db = makeFakeDb({ formats: [dual], rules });
+    const [result] = await previewImports(db, HUSBAND, [{
+      filename: "utf8.csv",
+      contentBase64: b64(csv),
+      formatName,
+    }]);
+    expect(result.error).toBeNull();
+    expect(result.detectedFormat).toBe(format.name);
+    expect(result.count).toBe(2);
+  });
+
+  it.each([
+    ["auto", undefined],
+    ["manual", format.name],
+  ])("imports Shift_JIS with multiple candidates in %s mode", async (_mode, formatName) => {
+    const dual = { ...format, encodings: ["Shift_JIS", "UTF-8"] };
+    const db = makeFakeDb({ formats: [dual], rules });
+    const [result] = await previewImports(db, HUSBAND, [{
+      filename: "shift-jis.csv",
+      contentBase64: shiftJisCsvBase64,
+      formatName,
+    }]);
+    expect(result.error).toBeNull();
+    expect(result.detectedFormat).toBe(format.name);
+    expect(result.count).toBe(2);
+  });
 });
 
 describe("manual format validation", () => {
@@ -189,6 +239,98 @@ describe("manual format validation", () => {
     ]);
     expect(result.error).toContain("有効な取引を読み取れませんでした");
     expect(result.count).toBe(0);
+  });
+
+  it("distinguishes all decoding failures", async () => {
+    const dual = { ...format, encodings: ["UTF-8", "Shift_JIS"] };
+    const db = makeFakeDb({ formats: [dual], rules });
+    const [result] = await previewImports(db, HUSBAND, [{
+      filename: "invalid.csv",
+      contentBase64: b64Bytes(new Uint8Array([0x81])),
+      formatName: dual.name,
+    }]);
+    expect(result.error).toContain("設定された文字コード");
+    expect(result.error).toContain("UTF-8・Shift_JIS");
+  });
+
+  it("distinguishes decoded files that all fail structural validation", async () => {
+    const dual = { ...format, encodings: ["UTF-8", "Shift_JIS"] };
+    const db = makeFakeDb({ formats: [dual], rules });
+    const [result] = await previewImports(db, HUSBAND, [{
+      filename: "wrong.csv",
+      contentBase64: b64("wrong,header\nnot-a-date,x"),
+      formatName: dual.name,
+    }]);
+    expect(result.error).toContain("有効な取引を読み取れませんでした");
+    expect(result.error).not.toContain("設定された文字コード");
+  });
+
+  it("stops when multiple encodings produce different eligible text", async () => {
+    const text = "date,desc,amount\n2026/07/01,café,500";
+    const dual = {
+      ...format,
+      encodings: ["Shift_JIS", "UTF-8"],
+      header_signature: "date,desc,amount",
+    };
+    const db = makeFakeDb({ formats: [dual], rules });
+    const [result] = await previewImports(db, HUSBAND, [{
+      filename: "ambiguous.csv",
+      contentBase64: b64(text),
+      formatName: dual.name,
+    }]);
+    expect(result.error).toContain("文字コードを一意に判定できませんでした");
+    expect(result.count).toBe(0);
+  });
+});
+
+describe("format encoding resolution", () => {
+  it("continues after an earlier successful decode fails structural validation", () => {
+    const text = "é,desc,amount\n2026/07/01,fictional,500";
+    const dual = {
+      ...format,
+      encodings: ["Shift_JIS", "UTF-8"],
+      header_signature: "é,desc,amount",
+    };
+    const result = evaluateFormatEncodings(utf8Bytes(text), dual);
+    expect(result.kind).toBe("eligible");
+    if (result.kind === "eligible") {
+      expect(result.encoding).toBe("UTF-8");
+      expect(result.text).toBe(text);
+    }
+  });
+
+  it("uses the first configured encoding when eligible decoded text is identical", () => {
+    const text = "date,desc,amount\n2026/07/01,fictional,500";
+    const dual = {
+      ...format,
+      encodings: ["Shift_JIS", "UTF-8"],
+      header_signature: "date,desc,amount",
+    };
+    const result = evaluateFormatEncodings(utf8Bytes(text), dual);
+    expect(result.kind).toBe("eligible");
+    if (result.kind === "eligible") expect(result.encoding).toBe("Shift_JIS");
+  });
+
+  it("excludes an encoding-ambiguous format and adopts another unique format", async () => {
+    const text = "date,desc,amount\n2026/07/01,café,500";
+    const ambiguous = {
+      ...format,
+      encodings: ["Shift_JIS", "UTF-8"],
+      header_signature: "date,desc,amount",
+    };
+    const unique = {
+      ...ambiguous,
+      id: 2,
+      name: "一意形式",
+      encodings: ["UTF-8"],
+    };
+    const db = makeFakeDb({ formats: [ambiguous, unique], rules });
+    const [result] = await previewImports(db, HUSBAND, [{
+      filename: "auto.csv",
+      contentBase64: b64(text),
+    }]);
+    expect(result.error).toBeNull();
+    expect(result.detectedFormat).toBe("一意形式");
   });
 });
 
