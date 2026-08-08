@@ -43,6 +43,10 @@ const csvFormatEncodingsSql = readFileSync(
   fileURLToPath(new URL("../migrations/0011_csv_format_encodings.sql", import.meta.url)),
   "utf8",
 );
+const mufgFormatSql = readFileSync(
+  fileURLToPath(new URL("../migrations/0012_mufg_csv_format.sql", import.meta.url)),
+  "utf8",
+);
 
 /** Every table in TABLE_NAMES must be created by *some* migration. */
 const allMigrationSql = [
@@ -55,6 +59,7 @@ const allMigrationSql = [
   categoryRulesOwnerSql,
   recategorizeHistorySql,
   csvFormatEncodingsSql,
+  mufgFormatSql,
 ].join("\n");
 
 describe("initial migration schema", () => {
@@ -149,6 +154,22 @@ describe("CSV format encodings migration", () => {
     expect(csvFormatEncodingsSql).not.toContain("'楽天カード'");
     expect(csvFormatEncodingsSql).not.toContain("'東急カード'");
     expect(csvFormatEncodingsSql).not.toContain("'SBI新生銀行'");
+  });
+});
+
+describe("三菱UFJ CSV format migration", () => {
+  it("adds the optional second description column", () => {
+    expect(mufgFormatSql).toMatch(/ALTER TABLE csv_formats ADD COLUMN desc_col2 INTEGER/);
+  });
+
+  it("registers 三菱UFJ with Shift_JIS-first candidates and its 9-column header", () => {
+    expect(mufgFormatSql).toMatch(
+      /'三菱UFJ', 1, 2, 3, 4, 5, 6,\s*1, 'Shift_JIS', '\["Shift_JIS","UTF-8"\]'/,
+    );
+    expect(mufgFormatSql).toContain(
+      '"日付","摘要","摘要内容","支払い金額","預かり金額","差引残高","メモ","未資金化区分","入払区分"',
+    );
+    expect(mufgFormatSql).toMatch(/,\s*9\s*\)/);
   });
 });
 

@@ -22,6 +22,7 @@ const format: CsvFormat = {
   name: "架空カード",
   date_col: 1,
   desc_col: 2,
+  desc_col2: null,
   expense_col: 3,
   income_col: null,
   balance_col: null,

@@ -165,7 +165,7 @@ export function parseCsvFormatEncodings(
 export async function getCsvFormats(db: D1Database): Promise<CsvFormat[]> {
   const { results } = await db
     .prepare(
-      "SELECT id, name, date_col, desc_col, expense_col, income_col, balance_col, header_rows, encoding, encodings, header_signature, expected_columns FROM csv_formats ORDER BY id ASC",
+      "SELECT id, name, date_col, desc_col, desc_col2, expense_col, income_col, balance_col, header_rows, encoding, encodings, header_signature, expected_columns FROM csv_formats ORDER BY id ASC",
     )
     .all<CsvFormatRow>();
   return results.map(({ encoding, encodings, ...format }) => ({
@@ -180,12 +180,13 @@ export async function insertCsvFormat(
 ): Promise<number> {
   const res = await db
     .prepare(
-      "INSERT INTO csv_formats (name, date_col, desc_col, expense_col, income_col, balance_col, header_rows, encoding, encodings, header_signature, expected_columns) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO csv_formats (name, date_col, desc_col, desc_col2, expense_col, income_col, balance_col, header_rows, encoding, encodings, header_signature, expected_columns) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(
       f.name,
       f.date_col,
       f.desc_col,
+      f.desc_col2,
       f.expense_col,
       f.income_col,
       f.balance_col,
@@ -206,12 +207,13 @@ export async function updateCsvFormat(
 ): Promise<void> {
   await db
     .prepare(
-      "UPDATE csv_formats SET name = ?, date_col = ?, desc_col = ?, expense_col = ?, income_col = ?, balance_col = ?, header_rows = ?, encoding = ?, encodings = ?, header_signature = ?, expected_columns = ? WHERE id = ?",
+      "UPDATE csv_formats SET name = ?, date_col = ?, desc_col = ?, desc_col2 = ?, expense_col = ?, income_col = ?, balance_col = ?, header_rows = ?, encoding = ?, encodings = ?, header_signature = ?, expected_columns = ? WHERE id = ?",
     )
     .bind(
       f.name,
       f.date_col,
       f.desc_col,
+      f.desc_col2,
       f.expense_col,
       f.income_col,
       f.balance_col,

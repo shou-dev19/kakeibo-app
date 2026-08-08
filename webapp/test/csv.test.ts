@@ -8,6 +8,7 @@ function fmt(overrides: Partial<CsvFormat> = {}): CsvFormat {
     name: "テスト銀行",
     date_col: 1,
     desc_col: 2,
+    desc_col2: null,
     expense_col: 3,
     income_col: 4,
     balance_col: 5,
@@ -132,5 +133,56 @@ describe("parseCsv", () => {
     const csv = ["meta", "日付,内容,支出", "2025/07/01,x,100"].join("\n");
     const out = parseCsv(csv, fmt({ header_rows: 2, income_col: null, balance_col: null }));
     expect(out).toHaveLength(1);
+  });
+});
+
+// 摘要が2列に分かれるCSV（三菱UFJ）向けの内容連結。
+describe("desc_col2 (内容列の連結)", () => {
+  const mufg = fmt({
+    name: "三菱UFJ",
+    desc_col: 2,
+    desc_col2: 3,
+    expense_col: 4,
+    income_col: 5,
+    balance_col: 6,
+  });
+
+  it("joins both description columns with a single space", () => {
+    const csv = [
+      "h",
+      '"2025/7/10","ＪＣＢ","ＪＣＢカ－ド","129,365","","461,036","","","振替支払い"',
+    ].join("\n");
+    expect(parseCsv(csv, mufg)[0]).toMatchObject({
+      description: "ＪＣＢ ＪＣＢカ－ド",
+      amount: 129365,
+      type: "支出",
+      institution: "三菱UFJ",
+      balance: 461036,
+    });
+  });
+
+  it("falls back to the populated column when 摘要内容 is empty (ATM出金など)", () => {
+    const csv = [
+      "h",
+      '"2025/9/25","カ－ド","","10,000","","344,059","","","支払い"',
+    ].join("\n");
+    expect(parseCsv(csv, mufg)[0].description).toBe("カ－ド");
+  });
+
+  it("keeps 預かり金額 rows as 収入", () => {
+    const csv = [
+      "h",
+      '"2025/7/25","振込１","ヤマダ　タロウ","","500,000","961,036","","","振替入金"',
+    ].join("\n");
+    expect(parseCsv(csv, mufg)[0]).toMatchObject({
+      description: "振込１ ヤマダ　タロウ",
+      amount: 500000,
+      type: "収入",
+    });
+  });
+
+  it("leaves single-column formats unchanged", () => {
+    const csv = ["h", "2025/07/01,コンビニ,100,,0"].join("\n");
+    expect(parseCsv(csv, fmt())[0].description).toBe("コンビニ");
   });
 });

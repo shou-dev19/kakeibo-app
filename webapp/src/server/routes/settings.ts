@@ -115,6 +115,7 @@ settings.delete("/category-rules/:id", async (c) => {
 function parseCsvFormatBody(body: Record<string, unknown>) {
   const dateCol = toNullableInt(body.date_col);
   const descCol = toNullableInt(body.desc_col);
+  const descCol2 = toNullableInt(body.desc_col2);
   const expectedColumns = toNullableInt(body.expected_columns);
   const headerRows = toNullableInt(body.header_rows) ?? 1;
   const headerSignature = toNullableString(body.header_signature);
@@ -142,6 +143,7 @@ function parseCsvFormatBody(body: Record<string, unknown>) {
     name: body.name.trim(),
     date_col: dateCol,
     desc_col: descCol,
+    desc_col2: descCol2,
     expense_col: toNullableInt(body.expense_col),
     income_col: toNullableInt(body.income_col),
     balance_col: toNullableInt(body.balance_col),

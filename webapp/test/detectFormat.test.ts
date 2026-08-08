@@ -12,6 +12,7 @@ function format(overrides: Partial<CsvFormat> = {}): CsvFormat {
     name: "形式A",
     date_col: 1,
     desc_col: 2,
+    desc_col2: null,
     expense_col: 3,
     income_col: null,
     balance_col: null,

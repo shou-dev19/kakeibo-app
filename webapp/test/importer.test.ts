@@ -4,6 +4,8 @@ import {
   previewImports,
   runImports,
 } from "../src/server/services/importer";
+import { base64ToBytes } from "../src/server/services/decode";
+import { parseCsv } from "../src/shared/csv";
 import type { CategoryRule, CsvFormat, Owner } from "../src/shared/types";
 
 /**
@@ -91,6 +93,7 @@ const format: CsvFormat = {
   name: "テストカード",
   date_col: 1,
   desc_col: 2,
+  desc_col2: null,
   expense_col: 3,
   income_col: null,
   balance_col: null,
@@ -116,6 +119,26 @@ const b64Bytes = (bytes: Uint8Array) => {
 const utf8Bytes = (text: string) => new TextEncoder().encode(text);
 const shiftJisCsvBase64 =
   "k/qVdCyT4JdlLIvginoKMjAyNi8wNy8wMSyJy4vzk1iV3EEsNTAwCjIwMjYvMDcvMDIsicuL85NYldxCLDEyMDA=";
+
+// 三菱UFJ (migration 0012): Shift_JIS・9列・摘要が2列。ヘッダー + 引落 / 振込入金 /
+// 摘要内容が空のATM出金の3行。振込人名はサンプルの実名ではなくダミー。
+const mufgFormat: CsvFormat = {
+  id: 2,
+  name: "三菱UFJ",
+  date_col: 1,
+  desc_col: 2,
+  desc_col2: 3,
+  expense_col: 4,
+  income_col: 5,
+  balance_col: 6,
+  header_rows: 1,
+  encodings: ["Shift_JIS", "UTF-8"],
+  header_signature:
+    '"日付","摘要","摘要内容","支払い金額","預かり金額","差引残高","メモ","未資金化区分","入払区分"',
+  expected_columns: 9,
+};
+const mufgShiftJisCsvBase64 =
+  "IpP6lXQiLCKTRZd2Iiwik0WXdpPgl2UiLCKOeJWlgqKL4Ip6Iiwil2GCqYLoi+CKeiIsIo23iPiOY42CIiwig4GDgiIsIpaijpGL4Im7i+aVqiIsIpP8laWL5pWqIg0KIjIwMjUvNy8xMCIsIoJpgmKCYSIsIoJpgmKCYYNKgXyDaCIsIjEyOSwzNjUiLCIiLCI0NjEsMDM2IiwiIiwiIiwikFWR1o54laWCoiINCiIyMDI1LzcvMjUiLCKQVY2eglAiLCKDhIN9g1+BQINeg42DRSIsIiIsIjUwMCwwMDAiLCI5NjEsMDM2IiwiIiwiIiwikFWR1pP8i+AiDQoiMjAyNS85LzI1Iiwig0qBfINoIiwiIiwiMTAsMDAwIiwiIiwiMzQ0LDA1OSIsIiIsIiIsIo54laWCoiINCg==";
 
 describe("runImports", () => {
   it("imports rows from a file and reports per-file counts", async () => {
@@ -224,6 +247,53 @@ describe("previewImports", () => {
     expect(result.error).toBeNull();
     expect(result.detectedFormat).toBe(format.name);
     expect(result.count).toBe(2);
+  });
+});
+
+describe("三菱UFJ format", () => {
+  it("auto-detects the Shift_JIS 9-column file alongside other formats", async () => {
+    const db = makeFakeDb({ formats: [format, mufgFormat], rules });
+    const [result] = await previewImports(db, WIFE, [{
+      filename: "0599387.csv",
+      contentBase64: mufgShiftJisCsvBase64,
+    }]);
+    expect(result.error).toBeNull();
+    expect(result.detectedFormat).toBe("三菱UFJ");
+    expect(result.detectionConfident).toBe(true);
+    expect(result.count).toBe(3);
+    expect(result.dateFrom).toBe("2025-07-10");
+    expect(result.dateTo).toBe("2025-09-25");
+  });
+
+  it("decodes to 摘要＋摘要内容 descriptions with 預かり金額 as 収入", () => {
+    const evaluated = evaluateFormatEncodings(
+      base64ToBytes(mufgShiftJisCsvBase64),
+      mufgFormat,
+    );
+    expect(evaluated.kind).toBe("eligible");
+    if (evaluated.kind !== "eligible") return;
+    expect(evaluated.encoding).toBe("Shift_JIS");
+    expect(
+      parseCsv(evaluated.text, mufgFormat).map((tx) => [
+        tx.date, tx.description, tx.type, tx.amount, tx.balance,
+      ]),
+    ).toEqual([
+      ["2025-07-10", "ＪＣＢ ＪＣＢカ－ド", "支出", 129365, 461036],
+      ["2025-07-25", "振込１ ヤマダ　タロウ", "収入", 500000, 961036],
+      ["2025-09-25", "カ－ド", "支出", 10000, 344059],
+    ]);
+  });
+
+  it("imports the rows under the uploading user", async () => {
+    const db = makeFakeDb({ formats: [format, mufgFormat], rules });
+    const [result] = await runImports(db, WIFE, [{
+      filename: "0599387.csv",
+      contentBase64: mufgShiftJisCsvBase64,
+    }]);
+    expect(result.error).toBeNull();
+    expect(result.format).toBe("三菱UFJ");
+    expect(result.imported).toBe(3);
+    expect(db.rows.every((row) => row.owner === WIFE)).toBe(true);
   });
 });
 

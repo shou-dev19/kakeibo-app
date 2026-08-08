@@ -17,6 +17,7 @@ type Draft = {
   name: string;
   date_col: string;
   desc_col: string;
+  desc_col2: string;
   expense_col: string;
   income_col: string;
   balance_col: string;
@@ -40,6 +41,7 @@ const emptyDraft: Draft = {
   name: "",
   date_col: "1",
   desc_col: "2",
+  desc_col2: "",
   expense_col: "",
   income_col: "",
   balance_col: "",
@@ -85,6 +87,7 @@ export function CsvFormatsSection() {
                 <span className="text-sm text-gray-800">{f.name}</span>
                 <span className="text-xs text-gray-400">
                   {formatEncodingLabel(f.encodings)}・日{f.date_col}/名{f.desc_col}
+                  {f.desc_col2 ? `+${f.desc_col2}` : ""}
                   {f.expense_col ? `/出${f.expense_col}` : ""}
                   {f.income_col ? `/入${f.income_col}` : ""}
                 </span>
@@ -126,6 +129,7 @@ export function FormatModal({
           name: format.name,
           date_col: String(format.date_col),
           desc_col: String(format.desc_col),
+          desc_col2: format.desc_col2 == null ? "" : String(format.desc_col2),
           expense_col: format.expense_col == null ? "" : String(format.expense_col),
           income_col: format.income_col == null ? "" : String(format.income_col),
           balance_col: format.balance_col == null ? "" : String(format.balance_col),
@@ -161,6 +165,7 @@ export function FormatModal({
       name: draft.name.trim(),
       date_col: dateCol,
       desc_col: descCol,
+      desc_col2: num(draft.desc_col2),
       expense_col: num(draft.expense_col),
       income_col: num(draft.income_col),
       balance_col: num(draft.balance_col),
@@ -221,6 +226,9 @@ export function FormatModal({
           </Field>
           <Field label="内容列">
             <NumInput value={draft.desc_col} onChange={(v) => set("desc_col", v)} />
+          </Field>
+          <Field label="内容列2（任意・連結）">
+            <NumInput value={draft.desc_col2} onChange={(v) => set("desc_col2", v)} />
           </Field>
           <Field label="支出列（任意）">
             <NumInput value={draft.expense_col} onChange={(v) => set("expense_col", v)} />

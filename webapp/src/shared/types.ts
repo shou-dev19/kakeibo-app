@@ -77,6 +77,8 @@ export interface CsvFormat {
   name: string;
   date_col: number;
   desc_col: number;
+  /** 任意の第2内容列。摘要が2列に分かれるCSV（三菱UFJ等）で連結する。 */
+  desc_col2: number | null;
   expense_col: number | null;
   income_col: number | null;
   balance_col: number | null;

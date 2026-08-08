@@ -109,6 +109,21 @@ export function parseAmount(cell: string | undefined): number {
 }
 
 /**
+ * 内容（明細名）を組み立てる。`desc_col2` が設定されている場合は2列を半角
+ * スペースで連結する。三菱UFJのように摘要が「口座振替４」＋「ラクテンカ−ド
+ * サ−ビ」の2列に分かれるCSV向け。空の列は飛ばすので、片方だけの行は単独の値に
+ * なる（ATM出金の「カ−ド」など）。
+ */
+export function buildDescription(record: string[], format: CsvFormat): string {
+  const cols = [format.desc_col, format.desc_col2 ?? null];
+  return cols
+    .filter((col): col is number => col != null)
+    .map((col) => (record[col - 1] ?? "").trim())
+    .filter((cell) => cell !== "")
+    .join(" ");
+}
+
+/**
  * Parse pre-tokenized CSV text into transactions using a format definition.
  *
  * Column indices on `format` are 1-based (as in the GAS CSV format sheet).
@@ -139,7 +154,7 @@ export function parseCsv(text: string, format: CsvFormat): ParsedTransaction[] {
     const date = normalizeDate(rawDate);
     if (!date) continue; // invalid date row -> skip
 
-    const description = (record[format.desc_col - 1] ?? "").trim();
+    const description = buildDescription(record, format);
 
     let amount = 0;
     let type: TransactionType | "" = "";
